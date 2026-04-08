@@ -1,5 +1,6 @@
 import { db } from "@/lib/db"
 import type { CreateReferenceInput } from "@/types"
+import type { ReferenceStatus, ReferenceType, ReferencePriority } from "@/generated/prisma/client"
 
 export async function getReferences(userId: string) {
   return db.reference.findMany({
@@ -16,8 +17,27 @@ export async function createReference(userId: string, data: CreateReferenceInput
   })
 }
 
-export async function updateReference(id: string, userId: string, data: Partial<CreateReferenceInput> & { status?: string; comments?: string; readAt?: Date | null }) {
-  return db.reference.update({ where: { id, userId }, data })
+export async function updateReference(id: string, userId: string, data: {
+  title?: string
+  url?: string
+  source?: string | null
+  type?: ReferenceType
+  status?: ReferenceStatus
+  priority?: ReferencePriority
+  tags?: string[]
+  comments?: string | null
+  highlights?: string[]
+  readAt?: Date | null
+  areaId?: string | null
+}) {
+  const { areaId, ...rest } = data
+  return db.reference.update({
+    where: { id, userId },
+    data: {
+      ...rest,
+      ...(areaId !== undefined && { area: areaId ? { connect: { id: areaId } } : { disconnect: true } }),
+    },
+  })
 }
 
 export async function archiveReference(id: string, userId: string) {

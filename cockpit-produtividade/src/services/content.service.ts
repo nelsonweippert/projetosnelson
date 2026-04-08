@@ -1,5 +1,6 @@
 import { db } from "@/lib/db"
 import type { CreateContentInput } from "@/types"
+import type { ContentPhase, Platform, ContentFormat } from "@/generated/prisma/client"
 
 export async function getContents(userId: string) {
   return db.content.findMany({
@@ -16,8 +17,28 @@ export async function createContent(userId: string, data: CreateContentInput) {
   })
 }
 
-export async function updateContent(id: string, userId: string, data: Partial<CreateContentInput> & { phase?: string; publishedAt?: Date; publishedUrl?: string; hook?: string; script?: string; notes?: string }) {
-  return db.content.update({ where: { id, userId }, data })
+export async function updateContent(id: string, userId: string, data: {
+  title?: string
+  platform?: Platform
+  format?: ContentFormat
+  phase?: ContentPhase
+  hook?: string | null
+  script?: string | null
+  series?: string | null
+  plannedDate?: Date | null
+  publishedAt?: Date | null
+  publishedUrl?: string | null
+  notes?: string | null
+  areaId?: string | null
+}) {
+  const { areaId, ...rest } = data
+  return db.content.update({
+    where: { id, userId },
+    data: {
+      ...rest,
+      ...(areaId !== undefined && { area: areaId ? { connect: { id: areaId } } : { disconnect: true } }),
+    },
+  })
 }
 
 export async function archiveContent(id: string, userId: string) {
