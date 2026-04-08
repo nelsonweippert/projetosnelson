@@ -2,62 +2,32 @@
 
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
-import { createExpenseSchema, createIncomeSchema } from "@/validations/finance.validation"
-import { createExpense, createIncome, deleteExpense, deleteIncome } from "@/services/finance.service"
+import { createTransactionSchema } from "@/validations/finance.validation"
+import { createTransaction, archiveTransaction } from "@/services/finance.service"
 import type { ActionResult } from "@/types"
 
-async function getUserId(): Promise<string> {
+async function getUserId() {
   const session = await auth()
   if (!session?.user?.id) throw new Error("Não autorizado")
   return session.user.id
 }
 
-export async function createExpenseAction(data: unknown): Promise<ActionResult> {
+export async function createTransactionAction(data: unknown): Promise<ActionResult> {
   try {
     const userId = await getUserId()
-    const parsed = createExpenseSchema.safeParse(data)
+    const parsed = createTransactionSchema.safeParse(data)
     if (!parsed.success) return { success: false, error: "Dados inválidos" }
-
-    const expense = await createExpense(userId, parsed.data)
+    const transaction = await createTransaction(userId, parsed.data)
     revalidatePath("/financeiro")
-    return { success: true, data: expense }
-  } catch {
-    return { success: false, error: "Erro ao criar despesa" }
-  }
+    return { success: true, data: transaction }
+  } catch { return { success: false, error: "Erro ao criar lançamento" } }
 }
 
-export async function createIncomeAction(data: unknown): Promise<ActionResult> {
+export async function archiveTransactionAction(id: string): Promise<ActionResult> {
   try {
     const userId = await getUserId()
-    const parsed = createIncomeSchema.safeParse(data)
-    if (!parsed.success) return { success: false, error: "Dados inválidos" }
-
-    const income = await createIncome(userId, parsed.data)
-    revalidatePath("/financeiro")
-    return { success: true, data: income }
-  } catch {
-    return { success: false, error: "Erro ao criar receita" }
-  }
-}
-
-export async function deleteExpenseAction(id: string): Promise<ActionResult> {
-  try {
-    const userId = await getUserId()
-    await deleteExpense(id, userId)
+    await archiveTransaction(id, userId)
     revalidatePath("/financeiro")
     return { success: true, data: null }
-  } catch {
-    return { success: false, error: "Erro ao deletar despesa" }
-  }
-}
-
-export async function deleteIncomeAction(id: string): Promise<ActionResult> {
-  try {
-    const userId = await getUserId()
-    await deleteIncome(id, userId)
-    revalidatePath("/financeiro")
-    return { success: true, data: null }
-  } catch {
-    return { success: false, error: "Erro ao deletar receita" }
-  }
+  } catch { return { success: false, error: "Erro ao arquivar lançamento" } }
 }

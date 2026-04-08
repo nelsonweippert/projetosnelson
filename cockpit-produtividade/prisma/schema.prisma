@@ -19,12 +19,41 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tasks    Task[]
-  studies  Study[]
-  expenses Expense[]
-  incomes  Income[]
+  areas        Area[]
+  tasks        Task[]
+  transactions Transaction[]
+  goals        FinancialGoal[]
+  references   Reference[]
+  contents     Content[]
+  aiInsights   AiInsight[]
 
   @@map("users")
+}
+
+// ========================================
+// Áreas — entidade raiz de classificação
+// ========================================
+
+model Area {
+  id          String   @id @default(cuid())
+  name        String
+  color       String   @default("#00D6AB")
+  icon        String   @default("📁")
+  description String?
+  isArchived  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  taskAreas    TaskArea[]
+  transactions Transaction[]
+  references   Reference[]
+  contents     Content[]
+
+  @@index([userId])
+  @@map("areas")
 }
 
 // ========================================
@@ -35,6 +64,7 @@ enum TaskStatus {
   TODO
   IN_PROGRESS
   DONE
+  CANCELLED
 }
 
 enum TaskPriority {
@@ -43,113 +73,260 @@ enum TaskPriority {
   HIGH
 }
 
-model Task {
-  id          String       @id @default(cuid())
-  title       String
-  description String?
-  status      TaskStatus   @default(TODO)
-  priority    TaskPriority @default(MEDIUM)
-  dueDate     DateTime?
-  tags        String[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+enum Recurrence {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+model Task {
+  id           String       @id @default(cuid())
+  title        String
+  description  String?
+  notes        String?
+  priority     TaskPriority @default(MEDIUM)
+  status       TaskStatus   @default(TODO)
+  dueDate      DateTime?
+  estimatedMin Int?
+  recurrence   Recurrence   @default(NONE)
+  completedAt  DateTime?
+  isArchived   Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  userId   String
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  areas    TaskArea[]
+  subtasks Subtask[]
 
   @@index([userId, status])
   @@map("tasks")
 }
 
-// ========================================
-// Estudos
-// ========================================
+model TaskArea {
+  taskId String
+  areaId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  area   Area   @relation(fields: [areaId], references: [id], onDelete: Cascade)
 
-enum StudyStatus {
-  NOT_STARTED
-  IN_PROGRESS
-  COMPLETED
-  PAUSED
+  @@id([taskId, areaId])
+  @@map("task_areas")
 }
 
-model Study {
-  id          String      @id @default(cuid())
-  title       String
-  description String?
-  category    String
-  totalHours  Float       @default(0)
-  doneHours   Float       @default(0)
-  status      StudyStatus @default(NOT_STARTED)
-  link        String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+model Subtask {
+  id     String  @id @default(cuid())
+  title  String
+  done   Boolean @default(false)
+  order  Int     @default(0)
+  taskId String
+  task   Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
-  userId    String
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessions  StudySession[]
-
-  @@index([userId])
-  @@map("studies")
-}
-
-model StudySession {
-  id        String   @id @default(cuid())
-  hours     Float
-  note      String?
-  date      DateTime @default(now())
-
-  studyId String
-  study   Study  @relation(fields: [studyId], references: [id], onDelete: Cascade)
-
-  @@index([studyId])
-  @@map("study_sessions")
+  @@index([taskId])
+  @@map("subtasks")
 }
 
 // ========================================
 // Financeiro
 // ========================================
 
-enum TransactionCategory {
-  MORADIA
-  ALIMENTACAO
-  TRANSPORTE
-  SAUDE
-  EDUCACAO
-  LAZER
-  INVESTIMENTO
-  SALARIO
-  FREELANCE
-  OUTROS
+enum TransactionType {
+  INCOME
+  EXPENSE
 }
 
-model Expense {
-  id          String              @id @default(cuid())
-  description String
+enum PaymentMethod {
+  PIX
+  DEBIT
+  CREDIT
+  CASH
+  OTHER
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  type        TransactionType
   amount      Float
-  category    TransactionCategory
+  description String
+  category    String
   date        DateTime
-  recurring   Boolean             @default(false)
-  createdAt   DateTime            @default(now())
+  isFixed     Boolean         @default(false)
+  payment     PaymentMethod   @default(PIX)
+  notes       String?
+  isArchived  Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  areaId String?
+  area   Area?  @relation(fields: [areaId], references: [id])
+
+  @@index([userId, date])
+  @@index([userId, type])
+  @@map("transactions")
+}
+
+model FinancialGoal {
+  id            String    @id @default(cuid())
+  name          String
+  targetAmount  Float
+  currentAmount Float     @default(0)
+  deadline      DateTime?
+  category      String    @default("reserva")
+  isArchived    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, date])
-  @@map("expenses")
+  @@index([userId])
+  @@map("financial_goals")
 }
 
-model Income {
-  id          String              @id @default(cuid())
-  description String
-  amount      Float
-  category    TransactionCategory
-  date        DateTime
-  recurring   Boolean             @default(false)
-  createdAt   DateTime            @default(now())
+// ========================================
+// Estudos — Biblioteca de Referências
+// ========================================
+
+enum ReferenceType {
+  VIDEO
+  ARTICLE
+  BLOG
+  PODCAST
+  DOCUMENT
+  OTHER
+}
+
+enum ReferenceStatus {
+  UNREAD
+  READING
+  READ
+  ARCHIVED
+}
+
+enum ReferencePriority {
+  HIGH
+  NORMAL
+  LOW
+}
+
+model Reference {
+  id         String            @id @default(cuid())
+  title      String
+  url        String
+  source     String?
+  type       ReferenceType     @default(ARTICLE)
+  status     ReferenceStatus   @default(UNREAD)
+  priority   ReferencePriority @default(NORMAL)
+  tags       String[]
+  comments   String?
+  highlights String[]
+  aiSummary  String?
+  readAt     DateTime?
+  isArchived Boolean           @default(false)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  areaId String?
+  area   Area?  @relation(fields: [areaId], references: [id])
+
+  @@index([userId, status])
+  @@map("references")
+}
+
+// ========================================
+// Conteúdo — Pipeline de Produção
+// ========================================
+
+enum Platform {
+  YOUTUBE
+  INSTAGRAM
+  TIKTOK
+  TWITCH
+  OTHER
+}
+
+enum ContentFormat {
+  LONG_VIDEO
+  SHORT
+  REELS
+  POST
+  LIVE
+  THREAD
+}
+
+enum ContentPhase {
+  IDEA
+  SCRIPT
+  RECORDING
+  EDITING
+  REVIEW
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+model Content {
+  id           String        @id @default(cuid())
+  title        String
+  platform     Platform      @default(YOUTUBE)
+  format       ContentFormat @default(LONG_VIDEO)
+  phase        ContentPhase  @default(IDEA)
+  hook         String?
+  script       String?
+  series       String?
+  plannedDate  DateTime?
+  publishedAt  DateTime?
+  publishedUrl String?
+  notes        String?
+  isArchived   Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  userId  String
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  areaId  String?
+  area    Area?          @relation(fields: [areaId], references: [id])
+  metrics ContentMetrics?
+
+  @@index([userId, phase])
+  @@map("contents")
+}
+
+model ContentMetrics {
+  id            String  @id @default(cuid())
+  views         Int?
+  reach         Int?
+  engagement    Float?
+  ctr           Float?
+  retention     Float?
+  newFollowers  Int?
+  directRevenue Float?
+  notes         String?
+  contentId     String  @unique
+  content       Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@map("content_metrics")
+}
+
+// ========================================
+// Motor IA — Insights
+// ========================================
+
+model AiInsight {
+  id        String   @id @default(cuid())
+  module    String
+  type      String
+  content   String
+  reaction  String?
+  createdAt DateTime @default(now())
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, date])
-  @@map("incomes")
+  @@index([userId])
+  @@map("ai_insights")
 }

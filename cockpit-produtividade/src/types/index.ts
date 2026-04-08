@@ -1,101 +1,101 @@
 import type {
   Task,
-  TaskStatus,
-  TaskPriority,
-  Study,
-  StudyStatus,
-  StudySession,
-  Expense,
-  Income,
-  TransactionCategory,
+  TaskArea,
+  Area,
+  Subtask,
 } from "@/generated/prisma/client"
 
-// ── Re-exports ──────────────────────────────────────────────────────────────
 export type {
+  User,
+  Area,
   Task,
+  TaskArea,
+  Subtask,
+  Transaction,
+  FinancialGoal,
+  Reference,
+  Content,
+  ContentMetrics,
+  AiInsight,
   TaskStatus,
   TaskPriority,
-  Study,
-  StudyStatus,
-  StudySession,
-  Expense,
-  Income,
-  TransactionCategory,
+  Recurrence,
+  TransactionType,
+  PaymentMethod,
+  ReferenceType,
+  ReferenceStatus,
+  ReferencePriority,
+  Platform,
+  ContentFormat,
+  ContentPhase,
+} from "@/generated/prisma/client"
+
+export type ActionResult<T = unknown> =
+  | { success: true; data: T }
+  | { success: false; error: string }
+
+export type CreateAreaInput = {
+  name: string
+  color?: string
+  icon?: string
+  description?: string
 }
 
-// ── Tasks ────────────────────────────────────────────────────────────────────
 export type CreateTaskInput = {
   title: string
   description?: string
-  priority?: TaskPriority
+  notes?: string
+  priority?: "LOW" | "MEDIUM" | "HIGH"
   dueDate?: Date | null
-  tags?: string[]
+  estimatedMin?: number | null
+  recurrence?: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY"
+  areaIds?: string[]
 }
 
 export type UpdateTaskInput = Partial<CreateTaskInput> & {
-  status?: TaskStatus
+  status?: "TODO" | "IN_PROGRESS" | "DONE" | "CANCELLED"
+  completedAt?: Date | null
 }
 
-export type TaskWithMeta = Task
-
-// ── Studies ──────────────────────────────────────────────────────────────────
-export type CreateStudyInput = {
-  title: string
-  description?: string
+export type CreateTransactionInput = {
+  type: "INCOME" | "EXPENSE"
+  amount: number
+  description: string
   category: string
-  totalHours?: number
-  link?: string
-}
-
-export type UpdateStudyInput = Partial<CreateStudyInput> & {
-  status?: StudyStatus
-  doneHours?: number
-}
-
-export type StudyWithSessions = Study & {
-  sessions: StudySession[]
-}
-
-export type CreateStudySessionInput = {
-  studyId: string
-  hours: number
-  note?: string
-  date?: Date
-}
-
-// ── Finance ──────────────────────────────────────────────────────────────────
-export type CreateExpenseInput = {
-  description: string
-  amount: number
-  category: TransactionCategory
   date: Date
-  recurring?: boolean
+  isFixed?: boolean
+  payment?: "PIX" | "DEBIT" | "CREDIT" | "CASH" | "OTHER"
+  notes?: string
+  areaId?: string | null
 }
 
-export type CreateIncomeInput = {
-  description: string
-  amount: number
-  category: TransactionCategory
-  date: Date
-  recurring?: boolean
+export type CreateReferenceInput = {
+  title: string
+  url: string
+  source?: string
+  type?: "VIDEO" | "ARTICLE" | "BLOG" | "PODCAST" | "DOCUMENT" | "OTHER"
+  priority?: "HIGH" | "NORMAL" | "LOW"
+  tags?: string[]
+  areaId?: string | null
+}
+
+export type CreateContentInput = {
+  title: string
+  platform?: "YOUTUBE" | "INSTAGRAM" | "TIKTOK" | "TWITCH" | "OTHER"
+  format?: "LONG_VIDEO" | "SHORT" | "REELS" | "POST" | "LIVE" | "THREAD"
+  hook?: string
+  series?: string
+  plannedDate?: Date | null
+  areaId?: string | null
 }
 
 export type FinanceSummary = {
   totalIncome: number
   totalExpense: number
   balance: number
+  savingsRate: number
   month: number
   year: number
 }
 
-// ── Dashboard ─────────────────────────────────────────────────────────────────
-export type DashboardStats = {
-  tasks: { todo: number; inProgress: number; done: number; total: number }
-  studies: { total: number; inProgress: number; completed: number; doneHours: number }
-  finance: FinanceSummary
-}
-
-// ── Action Result ─────────────────────────────────────────────────────────────
-export type ActionResult<T = unknown> =
-  | { success: true; data: T }
-  | { success: false; error: string }
+export type TaskWithAreas = Task & { areas: (TaskArea & { area: Area })[]; subtasks: Subtask[] }

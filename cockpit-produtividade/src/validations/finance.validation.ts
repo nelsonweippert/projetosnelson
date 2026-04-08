@@ -1,19 +1,15 @@
 import { z } from "zod"
 
-const categories = [
-  "MORADIA", "ALIMENTACAO", "TRANSPORTE", "SAUDE",
-  "EDUCACAO", "LAZER", "INVESTIMENTO", "SALARIO", "FREELANCE", "OUTROS",
-] as const
-
-export const createExpenseSchema = z.object({
-  description: z.string().min(1, "Descrição obrigatória").max(200),
-  amount: z.coerce.number().min(0.01, "Valor deve ser maior que zero"),
-  category: z.enum(categories),
+export const createTransactionSchema = z.object({
+  type: z.enum(["INCOME", "EXPENSE"]),
+  amount: z.coerce.number().min(0.01),
+  description: z.string().min(1).max(200),
+  category: z.string().min(1),
   date: z.coerce.date(),
-  recurring: z.boolean().default(false),
+  isFixed: z.boolean().default(false),
+  payment: z.enum(["PIX", "DEBIT", "CREDIT", "CASH", "OTHER"]).default("PIX"),
+  notes: z.string().optional(),
+  areaId: z.string().optional().nullable(),
 })
 
-export const createIncomeSchema = createExpenseSchema
-
-export type CreateExpenseInput = z.infer<typeof createExpenseSchema>
-export type CreateIncomeInput = z.infer<typeof createIncomeSchema>
+export type CreateTransactionInput = z.infer<typeof createTransactionSchema>
