@@ -1,19 +1,21 @@
 import { auth } from "@/lib/auth"
 import { getTaskStats } from "@/services/task.service"
-import { getStudyStats } from "@/services/study.service"
+import { getReferenceStats } from "@/services/reference.service"
 import { getFinanceSummary } from "@/services/finance.service"
-import { CheckSquare, BookOpen, DollarSign, TrendingUp, TrendingDown, Clock, Target } from "lucide-react"
+import { getContentStats } from "@/services/content.service"
+import { CheckSquare, BookOpen, DollarSign, TrendingUp, TrendingDown, Target, Video } from "lucide-react"
 import Link from "next/link"
-import { formatCurrency, formatHours } from "@/lib/utils"
+import { formatCurrency } from "@/lib/utils"
 
 export default async function DashboardPage() {
   const session = await auth()
   const userId = session?.user?.id!
 
-  const [taskStats, studyStats, finance] = await Promise.all([
+  const [taskStats, refStats, finance, contentStats] = await Promise.all([
     getTaskStats(userId),
-    getStudyStats(userId),
+    getReferenceStats(userId),
     getFinanceSummary(userId),
+    getContentStats(userId),
   ])
 
   const stats = [
@@ -25,17 +27,15 @@ export default async function DashboardPage() {
       color: "text-blue-500",
       bg: "bg-blue-500/10",
       href: "/tarefas",
-      trend: taskStats.done > 0 ? "up" : "neutral",
     },
     {
-      label: "Estudos em andamento",
-      value: String(studyStats.inProgress),
-      sub: `${formatHours(studyStats.doneHours)} estudadas`,
+      label: "Referências para ler",
+      value: String(refStats.unread + refStats.reading),
+      sub: `${refStats.read} lidas`,
       icon: BookOpen,
       color: "text-purple-500",
       bg: "bg-purple-500/10",
       href: "/estudos",
-      trend: studyStats.doneHours > 0 ? "up" : "neutral",
     },
     {
       label: "Receita do mês",
@@ -45,7 +45,6 @@ export default async function DashboardPage() {
       color: "text-accent-dark",
       bg: "bg-accent/10",
       href: "/financeiro",
-      trend: finance.balance >= 0 ? "up" : "down",
     },
     {
       label: "Saldo atual",
@@ -55,15 +54,14 @@ export default async function DashboardPage() {
       color: finance.balance >= 0 ? "text-emerald-500" : "text-red-500",
       bg: finance.balance >= 0 ? "bg-emerald-500/10" : "bg-red-500/10",
       href: "/financeiro",
-      trend: finance.balance >= 0 ? "up" : "down",
     },
   ]
 
   const quickLinks = [
-    { label: "Nova Tarefa", href: "/tarefas?new=1", icon: CheckSquare },
-    { label: "Novo Estudo", href: "/estudos?new=1", icon: BookOpen },
-    { label: "Registrar Receita", href: "/financeiro?new=income", icon: TrendingUp },
-    { label: "Registrar Gasto", href: "/financeiro?new=expense", icon: TrendingDown },
+    { label: "Nova Tarefa", href: "/tarefas", icon: CheckSquare },
+    { label: "Nova Referência", href: "/estudos", icon: BookOpen },
+    { label: "Registrar Receita", href: "/financeiro", icon: TrendingUp },
+    { label: "Registrar Gasto", href: "/financeiro", icon: TrendingDown },
   ]
 
   return (
@@ -81,10 +79,8 @@ export default async function DashboardPage() {
         {stats.map((stat) => (
           <Link key={stat.label} href={stat.href}>
             <div className="cockpit-card flex flex-col gap-3 cursor-pointer hover:border-accent/30 transition-colors">
-              <div className="flex items-start justify-between">
-                <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center`}>
-                  <stat.icon size={20} className={stat.color} />
-                </div>
+              <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center`}>
+                <stat.icon size={20} className={stat.color} />
               </div>
               <div>
                 <p className="text-2xl font-bold text-cockpit-text">{stat.value}</p>
@@ -96,8 +92,9 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      {/* Progresso Tarefas */}
+      {/* Progress Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Tasks */}
         <div className="cockpit-card space-y-4">
           <div className="flex items-center gap-2">
             <Target size={16} className="text-accent" />
@@ -108,9 +105,9 @@ export default async function DashboardPage() {
           ) : (
             <div className="space-y-3">
               {[
-                { label: "A fazer", count: taskStats.todo, color: "bg-cockpit-border", total: taskStats.total },
-                { label: "Em andamento", count: taskStats.inProgress, color: "bg-amber-400", total: taskStats.total },
-                { label: "Concluídas", count: taskStats.done, color: "bg-emerald-500", total: taskStats.total },
+                { label: "A fazer", count: taskStats.todo, color: "bg-cockpit-border" },
+                { label: "Em andamento", count: taskStats.inProgress, color: "bg-amber-400" },
+                { label: "Concluídas", count: taskStats.done, color: "bg-emerald-500" },
               ].map((item) => (
                 <div key={item.label}>
                   <div className="flex justify-between text-xs mb-1">
@@ -120,7 +117,7 @@ export default async function DashboardPage() {
                   <div className="w-full h-1.5 bg-cockpit-border-light rounded-full overflow-hidden">
                     <div
                       className={`h-full ${item.color} rounded-full transition-all`}
-                      style={{ width: item.total > 0 ? `${(item.count / item.total) * 100}%` : "0%" }}
+                      style={{ width: taskStats.total > 0 ? `${(item.count / taskStats.total) * 100}%` : "0%" }}
                     />
                   </div>
                 </div>
@@ -129,19 +126,20 @@ export default async function DashboardPage() {
           )}
         </div>
 
+        {/* Conteúdo */}
         <div className="cockpit-card space-y-4">
           <div className="flex items-center gap-2">
-            <Clock size={16} className="text-purple-500" />
-            <h2 className="text-sm font-semibold text-cockpit-text">Progresso dos Estudos</h2>
+            <Video size={16} className="text-red-500" />
+            <h2 className="text-sm font-semibold text-cockpit-text">Pipeline de Conteúdo</h2>
           </div>
-          {studyStats.total === 0 ? (
-            <p className="text-sm text-cockpit-muted">Nenhum estudo cadastrado.</p>
+          {contentStats.total === 0 ? (
+            <p className="text-sm text-cockpit-muted">Nenhum conteúdo cadastrado.</p>
           ) : (
             <div className="space-y-3">
               {[
-                { label: "Total de cursos", count: studyStats.total, color: "bg-purple-400", total: studyStats.total },
-                { label: "Em andamento", count: studyStats.inProgress, color: "bg-amber-400", total: studyStats.total },
-                { label: "Concluídos", count: studyStats.completed, color: "bg-emerald-500", total: studyStats.total },
+                { label: "Ideias", count: contentStats.ideas, color: "bg-blue-400" },
+                { label: "Em produção", count: contentStats.inProduction, color: "bg-amber-400" },
+                { label: "Publicados", count: contentStats.published, color: "bg-emerald-500" },
               ].map((item) => (
                 <div key={item.label}>
                   <div className="flex justify-between text-xs mb-1">
@@ -151,7 +149,7 @@ export default async function DashboardPage() {
                   <div className="w-full h-1.5 bg-cockpit-border-light rounded-full overflow-hidden">
                     <div
                       className={`h-full ${item.color} rounded-full transition-all`}
-                      style={{ width: item.total > 0 ? `${(item.count / item.total) * 100}%` : "0%" }}
+                      style={{ width: contentStats.total > 0 ? `${(item.count / contentStats.total) * 100}%` : "0%" }}
                     />
                   </div>
                 </div>
@@ -166,7 +164,7 @@ export default async function DashboardPage() {
         <h2 className="text-sm font-semibold text-cockpit-text mb-4">Ações Rápidas</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {quickLinks.map((link) => (
-            <Link key={link.href} href={link.href}>
+            <Link key={link.href + link.label} href={link.href}>
               <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl border border-cockpit-border hover:border-accent/40 hover:bg-accent/5 transition-all cursor-pointer">
                 <link.icon size={15} className="text-cockpit-muted" />
                 <span className="text-xs font-medium text-cockpit-text">{link.label}</span>

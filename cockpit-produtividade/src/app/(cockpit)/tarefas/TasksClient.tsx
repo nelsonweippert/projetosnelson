@@ -1,21 +1,24 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { Plus, Trash2, CheckSquare, Clock, Circle, ChevronDown, X, Loader2, Tag } from "lucide-react"
+import { Plus, Archive, CheckSquare, Clock, Circle, Ban, X, Loader2, ChevronDown } from "lucide-react"
 import { cn, formatDate } from "@/lib/utils"
-import { createTaskAction, updateTaskAction, deleteTaskAction } from "@/app/actions/task.actions"
-import type { Task, TaskStatus, TaskPriority } from "@/types"
+import { createTaskAction, updateTaskAction, archiveTaskAction, createSubtaskAction, toggleSubtaskAction } from "@/app/actions/task.actions"
+import type { Area, TaskStatus, TaskPriority } from "@/types"
+import type { TaskWithAreas } from "@/types"
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   TODO: "A fazer",
   IN_PROGRESS: "Em andamento",
   DONE: "Concluída",
+  CANCELLED: "Cancelada",
 }
 
 const STATUS_ICON: Record<TaskStatus, React.ReactNode> = {
   TODO: <Circle size={15} className="text-cockpit-muted" />,
   IN_PROGRESS: <Clock size={15} className="text-amber-500" />,
   DONE: <CheckSquare size={15} className="text-emerald-500" />,
+  CANCELLED: <Ban size={15} className="text-red-400" />,
 }
 
 const PRIORITY_COLOR: Record<TaskPriority, string> = {
@@ -31,13 +34,15 @@ const PRIORITY_LABEL: Record<TaskPriority, string> = {
 }
 
 interface Props {
-  initialTasks: Task[]
+  initialTasks: TaskWithAreas[]
+  areas: Area[]
 }
 
-export function TasksClient({ initialTasks }: Props) {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks)
+export function TasksClient({ initialTasks, areas }: Props) {
+  const [tasks, setTasks] = useState<TaskWithAreas[]>(initialTasks)
   const [filter, setFilter] = useState<TaskStatus | "ALL">("ALL")
   const [showForm, setShowForm] = useState(false)
+  const [expandedTask, setExpandedTask] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   // Form state
@@ -45,41 +50,43 @@ export function TasksClient({ initialTasks }: Props) {
   const [description, setDescription] = useState("")
   const [priority, setPriority] = useState<TaskPriority>("MEDIUM")
   const [dueDate, setDueDate] = useState("")
-  const [tagInput, setTagInput] = useState("")
-  const [tags, setTags] = useState<string[]>([])
+  const [selectedAreaIds, setSelectedAreaIds] = useState<string[]>([])
+  const [estimatedMin, setEstimatedMin] = useState("")
+  const [subtaskInput, setSubtaskInput] = useState("")
 
-  const filtered = filter === "ALL" ? tasks : tasks.filter((t) => t.status === filter)
+  const filtered = filter === "ALL"
+    ? tasks.filter((t) => t.status !== "CANCELLED")
+    : tasks.filter((t) => t.status === filter)
 
   function resetForm() {
     setTitle(""); setDescription(""); setPriority("MEDIUM")
-    setDueDate(""); setTagInput(""); setTags([])
-    setShowForm(false)
+    setDueDate(""); setSelectedAreaIds([]); setEstimatedMin("")
+    setSubtaskInput(""); setShowForm(false)
   }
 
-  function addTag(e: React.KeyboardEvent) {
-    if ((e.key === "Enter" || e.key === ",") && tagInput.trim()) {
-      e.preventDefault()
-      setTags((prev) => [...new Set([...prev, tagInput.trim()])])
-      setTagInput("")
-    }
+  function toggleArea(id: string) {
+    setSelectedAreaIds((prev) => prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id])
   }
 
   function handleCreate() {
     if (!title.trim()) return
     startTransition(async () => {
       const result = await createTaskAction({
-        title, description, priority,
+        title,
+        description: description || undefined,
+        priority,
         dueDate: dueDate ? new Date(dueDate) : null,
-        tags,
+        areaIds: selectedAreaIds,
+        estimatedMin: estimatedMin ? Number(estimatedMin) : null,
       })
       if (result.success) {
-        setTasks((prev) => [result.data as Task, ...prev])
+        setTasks((prev) => [result.data as TaskWithAreas, ...prev])
         resetForm()
       }
     })
   }
 
-  function handleStatusChange(task: Task, status: TaskStatus) {
+  function handleStatusChange(task: TaskWithAreas, status: TaskStatus) {
     startTransition(async () => {
       const result = await updateTaskAction(task.id, { status })
       if (result.success) {
@@ -88,11 +95,44 @@ export function TasksClient({ initialTasks }: Props) {
     })
   }
 
-  function handleDelete(id: string) {
+  function handleArchive(id: string) {
     startTransition(async () => {
-      const result = await deleteTaskAction(id)
+      const result = await archiveTaskAction(id)
       if (result.success) setTasks((prev) => prev.filter((t) => t.id !== id))
     })
+  }
+
+  function handleAddSubtask(taskId: string, title: string) {
+    if (!title.trim()) return
+    startTransition(async () => {
+      const result = await createSubtaskAction(taskId, title)
+      if (result.success) {
+        setTasks((prev) => prev.map((t) => t.id === taskId
+          ? { ...t, subtasks: [...t.subtasks, result.data as any] }
+          : t
+        ))
+      }
+    })
+  }
+
+  function handleToggleSubtask(taskId: string, subtaskId: string, done: boolean) {
+    startTransition(async () => {
+      const result = await toggleSubtaskAction(subtaskId, done)
+      if (result.success) {
+        setTasks((prev) => prev.map((t) => t.id === taskId
+          ? { ...t, subtasks: t.subtasks.map((s) => s.id === subtaskId ? { ...s, done } : s) }
+          : t
+        ))
+      }
+    })
+  }
+
+  const filterCounts = {
+    ALL: tasks.filter((t) => t.status !== "CANCELLED").length,
+    TODO: tasks.filter((t) => t.status === "TODO").length,
+    IN_PROGRESS: tasks.filter((t) => t.status === "IN_PROGRESS").length,
+    DONE: tasks.filter((t) => t.status === "DONE").length,
+    CANCELLED: tasks.filter((t) => t.status === "CANCELLED").length,
   }
 
   return (
@@ -101,7 +141,7 @@ export function TasksClient({ initialTasks }: Props) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-cockpit-text">Tarefas</h1>
-          <p className="text-sm text-cockpit-muted mt-1">{tasks.length} tarefa{tasks.length !== 1 ? "s" : ""} no total</p>
+          <p className="text-sm text-cockpit-muted mt-1">{filterCounts.ALL} tarefa{filterCounts.ALL !== 1 ? "s" : ""} ativas</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
@@ -111,7 +151,7 @@ export function TasksClient({ initialTasks }: Props) {
         </button>
       </div>
 
-      {/* Form */}
+      {/* Create Form */}
       {showForm && (
         <div className="cockpit-card space-y-4">
           <div className="flex items-center justify-between">
@@ -137,7 +177,7 @@ export function TasksClient({ initialTasks }: Props) {
             className="w-full px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none"
           />
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-xs text-cockpit-muted mb-1.5">Prioridade</label>
               <select
@@ -159,27 +199,41 @@ export function TasksClient({ initialTasks }: Props) {
                 className="w-full px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30"
               />
             </div>
+            <div>
+              <label className="block text-xs text-cockpit-muted mb-1.5">Tempo estimado (min)</label>
+              <input
+                type="number"
+                value={estimatedMin}
+                onChange={(e) => setEstimatedMin(e.target.value)}
+                placeholder="Ex: 30"
+                className="w-full px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs text-cockpit-muted mb-1.5">Tags (Enter para adicionar)</label>
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {tags.map((tag) => (
-                <span key={tag} className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-accent/10 text-accent-dark">
-                  {tag}
-                  <button onClick={() => setTags((p) => p.filter((t) => t !== tag))}><X size={10} /></button>
-                </span>
-              ))}
+          {areas.length > 0 && (
+            <div>
+              <label className="block text-xs text-cockpit-muted mb-1.5">Áreas</label>
+              <div className="flex flex-wrap gap-2">
+                {areas.map((area) => (
+                  <button
+                    key={area.id}
+                    type="button"
+                    onClick={() => toggleArea(area.id)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                      selectedAreaIds.includes(area.id)
+                        ? "border-transparent text-white"
+                        : "border-cockpit-border text-cockpit-muted hover:border-cockpit-text/30"
+                    )}
+                    style={selectedAreaIds.includes(area.id) ? { backgroundColor: area.color } : {}}
+                  >
+                    <span>{area.icon}</span> {area.name}
+                  </button>
+                ))}
+              </div>
             </div>
-            <input
-              type="text"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={addTag}
-              placeholder="Ex: trabalho, pessoal..."
-              className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30"
-            />
-          </div>
+          )}
 
           <div className="flex justify-end gap-2">
             <button onClick={resetForm} className="px-4 py-2 text-sm text-cockpit-muted hover:text-cockpit-text border border-cockpit-border rounded-xl transition-colors">
@@ -197,9 +251,9 @@ export function TasksClient({ initialTasks }: Props) {
         </div>
       )}
 
-      {/* Filtros */}
-      <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1 w-fit">
-        {(["ALL", "TODO", "IN_PROGRESS", "DONE"] as const).map((f) => (
+      {/* Filters */}
+      <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1 w-fit flex-wrap">
+        {(["ALL", "TODO", "IN_PROGRESS", "DONE", "CANCELLED"] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -208,106 +262,145 @@ export function TasksClient({ initialTasks }: Props) {
               filter === f ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text"
             )}
           >
-            {f === "ALL" ? "Todas" : STATUS_LABEL[f as TaskStatus]}
-            <span className="ml-1.5 text-[10px] opacity-70">
-              {f === "ALL" ? tasks.length : tasks.filter((t) => t.status === f).length}
-            </span>
+            {f === "ALL" ? "Ativas" : STATUS_LABEL[f as TaskStatus]}
+            <span className="ml-1.5 text-[10px] opacity-70">{filterCounts[f]}</span>
           </button>
         ))}
       </div>
 
-      {/* Lista */}
-      <div className="cockpit-card !p-0 overflow-hidden">
+      {/* Task List */}
+      <div className="space-y-2">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-cockpit-muted">
+          <div className="cockpit-card flex flex-col items-center justify-center py-16 text-cockpit-muted">
             <CheckSquare size={32} strokeWidth={1} />
             <p className="text-sm mt-3">Nenhuma tarefa encontrada</p>
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-cockpit-border">
-                <th className="text-left text-[11px] font-semibold text-cockpit-muted uppercase tracking-wider px-5 py-3">Status</th>
-                <th className="text-left text-[11px] font-semibold text-cockpit-muted uppercase tracking-wider px-3 py-3">Tarefa</th>
-                <th className="text-left text-[11px] font-semibold text-cockpit-muted uppercase tracking-wider px-3 py-3 hidden sm:table-cell">Prioridade</th>
-                <th className="text-left text-[11px] font-semibold text-cockpit-muted uppercase tracking-wider px-3 py-3 hidden md:table-cell">Prazo</th>
-                <th className="text-right text-[11px] font-semibold text-cockpit-muted uppercase tracking-wider px-5 py-3">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((task) => (
-                <tr key={task.id} className="border-b border-cockpit-border-light hover:bg-cockpit-surface-hover transition-colors">
-                  {/* Status */}
-                  <td className="px-5 py-3.5">
-                    <div className="relative group w-fit">
-                      <button className="flex items-center gap-1.5">
-                        {STATUS_ICON[task.status]}
+          filtered.map((task) => (
+            <div key={task.id} className={cn("cockpit-card !p-0 overflow-hidden", task.status === "CANCELLED" && "opacity-60")}>
+              <div className="flex items-start gap-3 px-4 py-3.5">
+                {/* Status dropdown */}
+                <div className="relative group mt-0.5 flex-shrink-0">
+                  <button className="flex items-center gap-1 p-0.5 rounded hover:bg-cockpit-surface-hover transition-colors">
+                    {STATUS_ICON[task.status]}
+                  </button>
+                  <div className="absolute left-0 top-7 z-10 hidden group-hover:flex flex-col bg-cockpit-surface border border-cockpit-border rounded-xl shadow-lg overflow-hidden min-w-[150px]">
+                    {(["TODO", "IN_PROGRESS", "DONE", "CANCELLED"] as TaskStatus[]).map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => handleStatusChange(task, s)}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2 text-xs hover:bg-cockpit-surface-hover transition-colors text-left",
+                          task.status === s ? "text-accent-dark font-medium" : "text-cockpit-muted"
+                        )}
+                      >
+                        {STATUS_ICON[s]} {STATUS_LABEL[s]}
                       </button>
-                      <div className="absolute left-0 top-7 z-10 hidden group-hover:flex flex-col bg-cockpit-surface border border-cockpit-border rounded-xl shadow-lg overflow-hidden min-w-[140px]">
-                        {(["TODO", "IN_PROGRESS", "DONE"] as TaskStatus[]).map((s) => (
-                          <button
-                            key={s}
-                            onClick={() => handleStatusChange(task, s)}
-                            className={cn(
-                              "flex items-center gap-2 px-3 py-2 text-xs hover:bg-cockpit-surface-hover transition-colors text-left",
-                              task.status === s ? "text-accent-dark font-medium" : "text-cockpit-muted"
-                            )}
-                          >
-                            {STATUS_ICON[s]} {STATUS_LABEL[s]}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </td>
+                    ))}
+                  </div>
+                </div>
 
-                  {/* Título */}
-                  <td className="px-3 py-3.5">
-                    <p className={cn("text-sm font-medium", task.status === "DONE" ? "line-through text-cockpit-muted" : "text-cockpit-text")}>
-                      {task.title}
-                    </p>
-                    {task.description && (
-                      <p className="text-[11px] text-cockpit-muted mt-0.5 line-clamp-1">{task.description}</p>
-                    )}
-                    {task.tags.length > 0 && (
-                      <div className="flex gap-1 mt-1 flex-wrap">
-                        {task.tags.map((tag) => (
-                          <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent-dark flex items-center gap-0.5">
-                            <Tag size={8} />{tag}
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className={cn("text-sm font-medium truncate", task.status === "DONE" ? "line-through text-cockpit-muted" : "text-cockpit-text")}>
+                        {task.title}
+                      </p>
+                      {task.description && (
+                        <p className="text-[11px] text-cockpit-muted mt-0.5 line-clamp-1">{task.description}</p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                        <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full", PRIORITY_COLOR[task.priority])}>
+                          {PRIORITY_LABEL[task.priority]}
+                        </span>
+                        {task.dueDate && (
+                          <span className="text-[10px] text-cockpit-muted bg-cockpit-border-light px-2 py-0.5 rounded-full">
+                            {formatDate(task.dueDate)}
+                          </span>
+                        )}
+                        {task.estimatedMin && (
+                          <span className="text-[10px] text-cockpit-muted bg-cockpit-border-light px-2 py-0.5 rounded-full">
+                            {task.estimatedMin}min
+                          </span>
+                        )}
+                        {task.areas.map(({ area }) => (
+                          <span
+                            key={area.id}
+                            className="text-[10px] px-2 py-0.5 rounded-full text-white"
+                            style={{ backgroundColor: area.color }}
+                          >
+                            {area.icon} {area.name}
                           </span>
                         ))}
+                        {task.subtasks.length > 0 && (
+                          <span className="text-[10px] text-cockpit-muted">
+                            {task.subtasks.filter((s) => s.done).length}/{task.subtasks.length} subtarefas
+                          </span>
+                        )}
                       </div>
-                    )}
-                  </td>
+                    </div>
 
-                  {/* Prioridade */}
-                  <td className="px-3 py-3.5 hidden sm:table-cell">
-                    <span className={cn("text-[11px] font-medium px-2.5 py-1 rounded-full", PRIORITY_COLOR[task.priority])}>
-                      {PRIORITY_LABEL[task.priority]}
-                    </span>
-                  </td>
-
-                  {/* Prazo */}
-                  <td className="px-3 py-3.5 hidden md:table-cell">
-                    <span className="text-xs text-cockpit-muted">
-                      {task.dueDate ? formatDate(task.dueDate) : "—"}
-                    </span>
-                  </td>
-
-                  {/* Ações */}
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center justify-end">
+                    <div className="flex items-center gap-1 flex-shrink-0">
                       <button
-                        onClick={() => handleDelete(task.id)}
-                        className="p-1.5 text-cockpit-muted hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"
+                        onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
+                        className="p-1.5 text-cockpit-muted hover:text-cockpit-text rounded-lg hover:bg-cockpit-surface-hover transition-colors"
                       >
-                        <Trash2 size={14} />
+                        <ChevronDown size={14} className={cn("transition-transform", expandedTask === task.id && "rotate-180")} />
+                      </button>
+                      <button
+                        onClick={() => handleArchive(task.id)}
+                        className="p-1.5 text-cockpit-muted hover:text-amber-500 rounded-lg hover:bg-amber-500/10 transition-colors"
+                        title="Arquivar"
+                      >
+                        <Archive size={14} />
                       </button>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Expanded subtasks */}
+              {expandedTask === task.id && (
+                <div className="border-t border-cockpit-border-light px-4 py-3 space-y-2 bg-cockpit-bg/40">
+                  {task.subtasks.map((sub) => (
+                    <label key={sub.id} className="flex items-center gap-2.5 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={sub.done}
+                        onChange={(e) => handleToggleSubtask(task.id, sub.id, e.target.checked)}
+                        className="w-3.5 h-3.5 accent-accent rounded"
+                      />
+                      <span className={cn("text-xs flex-1", sub.done ? "line-through text-cockpit-muted" : "text-cockpit-text")}>
+                        {sub.title}
+                      </span>
+                    </label>
+                  ))}
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="text"
+                      value={subtaskInput}
+                      onChange={(e) => setSubtaskInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          handleAddSubtask(task.id, subtaskInput)
+                          setSubtaskInput("")
+                        }
+                      }}
+                      placeholder="Adicionar subtarefa (Enter)"
+                      className="flex-1 px-2.5 py-1.5 bg-cockpit-bg border border-cockpit-border rounded-lg text-xs text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30"
+                    />
+                    <button
+                      onClick={() => { handleAddSubtask(task.id, subtaskInput); setSubtaskInput("") }}
+                      className="p-1.5 text-accent rounded-lg hover:bg-accent/10 transition-colors"
+                    >
+                      <Plus size={13} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))
         )}
       </div>
     </div>

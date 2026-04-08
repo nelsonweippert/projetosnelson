@@ -1,10 +1,9 @@
-export default function AreasPage() {
-  return (
-    <div className="flex items-center justify-center h-full min-h-[60vh]">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-cockpit-text mb-2">Áreas</h1>
-        <p className="text-cockpit-muted">Em breve</p>
-      </div>
-    </div>
-  )
+import { auth } from "@/lib/auth"
+import { getAreas } from "@/services/area.service"
+import { AreasClient } from "./AreasClient"
+
+export default async function AreasPage() {
+  const session = await auth()
+  const areas = await getAreas(session?.user?.id!)
+  return <AreasClient initialAreas={areas} />
 }
