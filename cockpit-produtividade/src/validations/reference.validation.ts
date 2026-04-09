@@ -2,7 +2,7 @@ import { z } from "zod"
 
 export const createReferenceSchema = z.object({
   title: z.string().min(1).max(200),
-  url: z.string().url(),
+  url: z.string().min(1).transform((v) => (/^https?:\/\//i.test(v) ? v : `https://${v}`)),
   source: z.string().optional(),
   type: z.enum(["VIDEO", "ARTICLE", "BLOG", "PODCAST", "DOCUMENT", "OTHER"]).default("ARTICLE"),
   priority: z.enum(["HIGH", "NORMAL", "LOW"]).default("NORMAL"),
