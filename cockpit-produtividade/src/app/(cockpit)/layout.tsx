@@ -20,6 +20,7 @@ import {
   Layers,
   Video,
   Sparkles,
+  CalendarDays,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -27,6 +28,7 @@ const navItems = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Áreas", href: "/areas", icon: Layers },
   { label: "Tarefas", href: "/tarefas", icon: CheckSquare },
+  { label: "Calendário", href: "/calendario", icon: CalendarDays },
   { label: "Estudos", href: "/estudos", icon: BookOpen },
   { label: "Financeiro", href: "/financeiro", icon: DollarSign },
   { label: "Conteúdo", href: "/conteudo", icon: Video },

@@ -17,6 +17,7 @@ export type {
   Content,
   ContentMetrics,
   AiInsight,
+  CalendarEvent,
   TaskStatus,
   TaskPriority,
   Recurrence,
@@ -28,6 +29,7 @@ export type {
   Platform,
   ContentFormat,
   ContentPhase,
+  EventType,
 } from "@/generated/prisma/client"
 
 export type ActionResult<T = unknown> =
@@ -99,3 +101,21 @@ export type FinanceSummary = {
 }
 
 export type TaskWithAreas = Task & { areas: (TaskArea & { area: Area })[]; subtasks: Subtask[] }
+
+export type CalendarEventWithArea = CalendarEvent & { area: Area | null }
+
+export type TaskWithDue = Task & { areas: (TaskArea & { area: Area })[] }
+
+export type CreateCalendarEventInput = {
+  title: string
+  type?: "MEETING" | "ATA" | "ACTION" | "GENERAL"
+  date: string
+  endDate?: string
+  description?: string
+  location?: string
+  attendees?: string[]
+  notes?: string
+  areaId?: string | null
+}
+
+export type UpdateCalendarEventInput = Partial<CreateCalendarEventInput>
