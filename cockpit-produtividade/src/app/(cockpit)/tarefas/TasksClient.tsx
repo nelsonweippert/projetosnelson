@@ -16,10 +16,10 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 }
 
 const STATUS_ICON: Record<TaskStatus, React.ReactNode> = {
-  TODO: <Circle size={15} className="text-cockpit-muted" />,
-  IN_PROGRESS: <Clock size={15} className="text-amber-500" />,
-  DONE: <CheckSquare size={15} className="text-emerald-500" />,
-  CANCELLED: <Ban size={15} className="text-red-400" />,
+  TODO: <Circle size={18} className="text-cockpit-muted" />,
+  IN_PROGRESS: <Clock size={18} className="text-amber-500" />,
+  DONE: <CheckSquare size={18} className="text-emerald-500" />,
+  CANCELLED: <Ban size={18} className="text-red-400" />,
 }
 
 const PRIORITY_COLOR: Record<TaskPriority, string> = {
@@ -283,7 +283,7 @@ export function TasksClient({ initialTasks, areas }: Props) {
           ) : (
             filtered.map((task) => (
               <div key={task.id} className={cn("cockpit-card !p-0 overflow-hidden", task.status === "CANCELLED" && "opacity-60")}>
-                <div className="flex items-start gap-3 px-4 py-3.5">
+                <div className="flex items-start gap-4 px-5 py-4">
                   {/* Status dropdown */}
                   <div className="relative group mt-0.5 flex-shrink-0">
                     <button
@@ -317,33 +317,33 @@ export function TasksClient({ initialTasks, areas }: Props) {
                       {task.title}
                     </p>
                     {task.description && (
-                      <p className="text-[11px] text-cockpit-muted mt-0.5 line-clamp-1">{task.description}</p>
+                      <p className="text-xs text-cockpit-muted mt-1 line-clamp-1">{task.description}</p>
                     )}
-                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                      <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full", PRIORITY_COLOR[task.priority])}>
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <span className={cn("text-xs font-medium px-2.5 py-1 rounded-full", PRIORITY_COLOR[task.priority])}>
                         {PRIORITY_LABEL[task.priority]}
                       </span>
                       {task.dueDate && (
-                        <span className="text-[10px] text-cockpit-muted bg-cockpit-border-light px-2 py-0.5 rounded-full">
+                        <span className="text-xs text-cockpit-muted bg-cockpit-border-light px-2.5 py-1 rounded-full">
                           {formatDate(task.dueDate)}
                         </span>
                       )}
                       {task.estimatedMin && (
-                        <span className="text-[10px] text-cockpit-muted bg-cockpit-border-light px-2 py-0.5 rounded-full">
+                        <span className="text-xs text-cockpit-muted bg-cockpit-border-light px-2.5 py-1 rounded-full">
                           {task.estimatedMin}min
                         </span>
                       )}
                       {task.areas.map(({ area }) => (
                         <span
                           key={area.id}
-                          className="text-[10px] px-2 py-0.5 rounded-full text-white"
+                          className="text-xs px-2.5 py-1 rounded-full text-white"
                           style={{ backgroundColor: area.color }}
                         >
                           {area.icon} {area.name}
                         </span>
                       ))}
                       {task.subtasks.length > 0 && (
-                        <span className="text-[10px] text-cockpit-muted">
+                        <span className="text-xs text-cockpit-muted">
                           {task.subtasks.filter((s) => s.done).length}/{task.subtasks.length} subtarefas
                         </span>
                       )}
@@ -356,7 +356,7 @@ export function TasksClient({ initialTasks, areas }: Props) {
                       className="p-1.5 text-cockpit-muted hover:text-amber-500 rounded-lg hover:bg-amber-500/10 transition-colors"
                       title="Arquivar"
                     >
-                      <Archive size={14} />
+                      <Archive size={16} />
                     </button>
                   </div>
                 </div>

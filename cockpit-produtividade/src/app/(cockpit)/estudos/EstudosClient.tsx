@@ -284,46 +284,46 @@ export function EstudosClient({ initialRefs, areas }: Props) {
         ) : (
           filtered.map((ref) => (
             <div key={ref.id} className="cockpit-card group">
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start gap-2 flex-wrap">
                     <a href={ref.url} target="_blank" rel="noopener noreferrer"
                       className="text-sm font-medium text-cockpit-text hover:text-accent transition-colors flex items-center gap-1.5 group/link">
                       {ref.title}
-                      <ExternalLink size={11} className="opacity-0 group-hover/link:opacity-100 transition-opacity" />
+                      <ExternalLink size={13} className="opacity-0 group-hover/link:opacity-100 transition-opacity" />
                     </a>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    <span className="text-[10px] text-cockpit-muted">{TYPE_LABEL[ref.type]}</span>
-                    {ref.source && <span className="text-[10px] text-cockpit-muted">· {ref.source}</span>}
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <span className="text-xs text-cockpit-muted">{TYPE_LABEL[ref.type]}</span>
+                    {ref.source && <span className="text-xs text-cockpit-muted">· {ref.source}</span>}
                     {ref.priority === "HIGH" && (
-                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium", PRIORITY_COLOR[ref.priority])}>
+                      <span className={cn("text-xs px-2.5 py-1 rounded-full font-medium", PRIORITY_COLOR[ref.priority])}>
                         Prioritário
                       </span>
                     )}
                     {ref.area && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: ref.area.color }}>
+                      <span className="text-xs px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: ref.area.color }}>
                         {ref.area.icon} {ref.area.name}
                       </span>
                     )}
                     {ref.tags.map((tag) => (
-                      <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent-dark">{tag}</span>
+                      <span key={tag} className="text-xs px-2 py-1 rounded-full bg-accent/10 text-accent-dark">{tag}</span>
                     ))}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 flex-shrink-0">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   {/* Status quick actions */}
                   <div className="relative group/status">
-                    <span className={cn("text-[10px] font-medium px-2.5 py-1 rounded-full cursor-pointer", STATUS_COLOR[ref.status])}>
+                    <span className={cn("text-xs font-medium px-3 py-1 rounded-full cursor-pointer", STATUS_COLOR[ref.status])}>
                       {STATUS_LABEL[ref.status]}
                     </span>
-                    <div className="absolute right-0 top-7 z-10 hidden group-hover/status:flex flex-col bg-cockpit-surface border border-cockpit-border rounded-xl shadow-lg overflow-hidden min-w-[120px]">
+                    <div className="absolute right-0 top-8 z-10 hidden group-hover/status:flex flex-col bg-cockpit-surface border border-cockpit-border rounded-xl shadow-lg overflow-hidden min-w-[120px]">
                       {(["UNREAD", "READING", "READ"] as ReferenceStatus[]).map((s) => (
                         <button key={s} onClick={() => handleStatusChange(ref.id, s)}
                           className={cn("flex items-center gap-2 px-3 py-2 text-xs hover:bg-cockpit-surface-hover transition-colors text-left",
                             ref.status === s ? "text-accent-dark font-medium" : "text-cockpit-muted")}>
-                          {s === "READ" ? <CheckCircle size={12} /> : s === "READING" ? <BookMarked size={12} /> : <Circle size={12} />}
+                          {s === "READ" ? <CheckCircle size={14} /> : s === "READING" ? <BookMarked size={14} /> : <Circle size={14} />}
                           {STATUS_LABEL[s]}
                         </button>
                       ))}
@@ -331,7 +331,7 @@ export function EstudosClient({ initialRefs, areas }: Props) {
                   </div>
                   <button onClick={() => handleArchive(ref.id)}
                     className="opacity-0 group-hover:opacity-100 p-1.5 text-cockpit-muted hover:text-amber-500 rounded-lg hover:bg-amber-500/10 transition-all">
-                    <Archive size={13} />
+                    <Archive size={16} />
                   </button>
                 </div>
               </div>
