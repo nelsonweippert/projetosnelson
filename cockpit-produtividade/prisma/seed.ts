@@ -7,14 +7,14 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! })
 const db = new PrismaClient({ adapter })
 
 async function main() {
-  const password = await bcrypt.hash("stormingbrabo", 12)
+  const password = await bcrypt.hash("admin12345", 12)
 
   const user = await db.user.upsert({
-    where: { email: "nelson@cockpit.local" },
-    update: { password },
+    where: { email: "storming@tempestlabs.gg" },
+    update: { name: "Nelson Weippert", password },
     create: {
       name: "Nelson Weippert",
-      email: "nelson@cockpit.local",
+      email: "storming@tempestlabs.gg",
       password,
     },
   })
