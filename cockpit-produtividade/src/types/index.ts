@@ -4,6 +4,7 @@ import type {
   Area,
   Subtask,
   CalendarEvent,
+  Reference,
 } from "@/generated/prisma/client"
 
 export type {
@@ -80,6 +81,7 @@ export type CreateReferenceInput = {
   priority?: "HIGH" | "NORMAL" | "LOW"
   tags?: string[]
   areaId?: string | null
+  plannedDate?: string | null
 }
 
 export type CreateContentInput = {
@@ -106,6 +108,8 @@ export type TaskWithAreas = Task & { areas: (TaskArea & { area: Area })[]; subta
 export type CalendarEventWithArea = CalendarEvent & { area?: Area | null }
 
 export type TaskWithDue = Task & { areas: (TaskArea & { area: Area })[] }
+
+export type StudyPlanned = Reference & { area?: Area | null }
 
 export type CreateCalendarEventInput = {
   title: string

@@ -11,9 +11,28 @@ export async function getReferences(userId: string) {
 }
 
 export async function createReference(userId: string, data: CreateReferenceInput) {
+  const { plannedDate, ...rest } = data
   return db.reference.create({
-    data: { ...data, userId },
+    data: {
+      ...rest,
+      plannedDate: plannedDate ? new Date(plannedDate) : null,
+      userId,
+    },
     include: { area: true },
+  })
+}
+
+export async function getStudiesPlannedInMonth(userId: string, year: number, month: number) {
+  const start = new Date(year, month - 1, 1)
+  const end = new Date(year, month, 0, 23, 59, 59)
+  return db.reference.findMany({
+    where: {
+      userId,
+      isArchived: false,
+      plannedDate: { gte: start, lte: end },
+    },
+    include: { area: true },
+    orderBy: { plannedDate: "asc" },
   })
 }
 

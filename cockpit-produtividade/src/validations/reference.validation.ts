@@ -8,6 +8,7 @@ export const createReferenceSchema = z.object({
   priority: z.enum(["HIGH", "NORMAL", "LOW"]).default("NORMAL"),
   tags: z.array(z.string()).default([]),
   areaId: z.string().optional().nullable(),
+  plannedDate: z.string().optional().nullable(),
 })
 
 export type CreateReferenceInput = z.infer<typeof createReferenceSchema>

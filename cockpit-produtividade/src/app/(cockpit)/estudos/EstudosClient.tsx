@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { Plus, BookOpen, ExternalLink, Archive, X, Loader2, CheckCircle, Circle, BookMarked } from "lucide-react"
+import { Plus, BookOpen, ExternalLink, Archive, X, Loader2, CheckCircle, Circle, BookMarked, Calendar } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createReferenceAction, updateReferenceStatusAction, archiveReferenceAction } from "@/app/actions/reference.actions"
 import type { Area, ReferenceStatus, ReferenceType, ReferencePriority } from "@/types"
@@ -15,6 +15,7 @@ type Reference = {
   status: ReferenceStatus
   priority: ReferencePriority
   tags: string[]
+  plannedDate?: string | Date | null
   area?: { id: string; name: string; color: string; icon: string } | null
 }
 
@@ -67,6 +68,7 @@ export function EstudosClient({ initialRefs, areas }: Props) {
   const [areaId, setAreaId] = useState("")
   const [tagInput, setTagInput] = useState("")
   const [tags, setTags] = useState<string[]>([])
+  const [plannedDate, setPlannedDate] = useState("")
 
   const filtered = refs.filter((r) => {
     if (r.status === "ARCHIVED") return false
@@ -85,6 +87,7 @@ export function EstudosClient({ initialRefs, areas }: Props) {
   function resetForm() {
     setTitle(""); setUrl(""); setSource(""); setType("ARTICLE")
     setPriority("NORMAL"); setAreaId(""); setTagInput(""); setTags([])
+    setPlannedDate("")
     setShowForm(false)
   }
 
@@ -106,6 +109,7 @@ export function EstudosClient({ initialRefs, areas }: Props) {
         priority,
         tags,
         areaId: areaId || null,
+        plannedDate: plannedDate ? new Date(plannedDate).toISOString() : null,
       })
       if (result.success) {
         setRefs((prev) => [result.data as Reference, ...prev])
@@ -214,6 +218,18 @@ export function EstudosClient({ initialRefs, areas }: Props) {
           </div>
 
           <div>
+            <label className="block text-xs text-cockpit-muted mb-1.5">
+              <Calendar size={11} className="inline mr-1" />Planejar para (opcional)
+            </label>
+            <input
+              type="datetime-local"
+              value={plannedDate}
+              onChange={(e) => setPlannedDate(e.target.value)}
+              className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30"
+            />
+          </div>
+
+          <div>
             <label className="block text-xs text-cockpit-muted mb-1.5">Tags (Enter para adicionar)</label>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {tags.map((tag) => (
@@ -304,6 +320,12 @@ export function EstudosClient({ initialRefs, areas }: Props) {
                     {ref.area && (
                       <span className="text-xs px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: ref.area.color }}>
                         {ref.area.icon} {ref.area.name}
+                      </span>
+                    )}
+                    {ref.plannedDate && (
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-600 flex items-center gap-1">
+                        <Calendar size={11} />
+                        {new Date(ref.plannedDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
                       </span>
                     )}
                     {ref.tags.map((tag) => (

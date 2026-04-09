@@ -226,6 +226,7 @@ model Reference {
   highlights String[]
   aiSummary  String?
   readAt     DateTime?
+  plannedDate DateTime?
   isArchived Boolean           @default(false)
   createdAt  DateTime          @default(now())
   updatedAt  DateTime          @updatedAt
@@ -236,6 +237,7 @@ model Reference {
   area   Area?  @relation(fields: [areaId], references: [id])
 
   @@index([userId, status])
+  @@index([userId, plannedDate])
   @@map("references")
 }
 

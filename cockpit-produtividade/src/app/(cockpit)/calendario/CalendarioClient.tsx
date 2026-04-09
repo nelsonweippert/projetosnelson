@@ -12,7 +12,7 @@ import {
   updateCalendarEventAction,
   archiveCalendarEventAction,
 } from "@/app/actions/calendar.actions"
-import type { CalendarEventWithArea, TaskWithDue, Area } from "@/types"
+import type { CalendarEventWithArea, TaskWithDue, StudyPlanned, Area } from "@/types"
 
 type EventType = "MEETING" | "ATA" | "ACTION" | "GENERAL"
 
@@ -58,10 +58,12 @@ const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 type DayItem =
   | { kind: "event"; data: CalendarEventWithArea }
   | { kind: "task"; data: TaskWithDue }
+  | { kind: "study"; data: StudyPlanned }
 
 interface Props {
   initialEvents: CalendarEventWithArea[]
   initialTasks: TaskWithDue[]
+  initialStudies: StudyPlanned[]
   areas: Area[]
   initialYear: number
   initialMonth: number
@@ -69,11 +71,12 @@ interface Props {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function CalendarioClient({ initialEvents, initialTasks, areas, initialYear, initialMonth }: Props) {
+export function CalendarioClient({ initialEvents, initialTasks, initialStudies, areas, initialYear, initialMonth }: Props) {
   const [year, setYear] = useState(initialYear)
   const [month, setMonth] = useState(initialMonth)
   const [events, setEvents] = useState<CalendarEventWithArea[]>(initialEvents)
-  const [tasks] = useState<TaskWithDue[]>(initialTasks)
+  const [tasks, setTasks] = useState<TaskWithDue[]>(initialTasks)
+  const [studies, setStudies] = useState<StudyPlanned[]>(initialStudies)
   const [selectedDay, setSelectedDay] = useState<number | null>(new Date().getDate())
   const [showForm, setShowForm] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEventWithArea | null>(null)
@@ -114,6 +117,13 @@ export function CalendarioClient({ initialEvents, initialTasks, areas, initialYe
         items.push({ kind: "task", data: t })
       }
     }
+    for (const s of studies) {
+      if (!s.plannedDate) continue
+      const d = new Date(s.plannedDate)
+      if (d.getDate() === day && d.getMonth() + 1 === month && d.getFullYear() === year) {
+        items.push({ kind: "study", data: s })
+      }
+    }
     return items
   }
 
@@ -138,6 +148,8 @@ export function CalendarioClient({ initialEvents, initialTasks, areas, initialYe
       if (res.ok) {
         const data = await res.json()
         setEvents(data.events ?? [])
+        setTasks(data.tasks ?? [])
+        setStudies(data.studies ?? [])
       }
     } catch { /* fallback silently */ }
     setIsLoadingMonth(false)
@@ -501,12 +513,22 @@ export function CalendarioClient({ initialEvents, initialTasks, areas, initialYe
                             </div>
                           )
                         }
+                        if (item.kind === "task") {
+                          return (
+                            <div
+                              key={item.data.id}
+                              className="text-[10px] font-medium px-1.5 py-0.5 rounded-md truncate bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+                            >
+                              ✓ {item.data.title}
+                            </div>
+                          )
+                        }
                         return (
                           <div
                             key={item.data.id}
-                            className="text-[10px] font-medium px-1.5 py-0.5 rounded-md truncate bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+                            className="text-[10px] font-medium px-1.5 py-0.5 rounded-md truncate bg-violet-500/10 text-violet-600 border border-violet-500/20"
                           >
-                            ✓ {item.data.title}
+                            📚 {item.data.title}
                           </div>
                         )
                       })}
@@ -531,6 +553,10 @@ export function CalendarioClient({ initialEvents, initialTasks, areas, initialYe
             <div className="flex items-center gap-1.5">
               <div className="w-2 h-2 rounded-full bg-emerald-500" />
               <span className="text-[11px] text-cockpit-muted">Tarefa</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-violet-500" />
+              <span className="text-[11px] text-cockpit-muted">Estudo</span>
             </div>
           </div>
         </div>
@@ -573,6 +599,28 @@ export function CalendarioClient({ initialEvents, initialTasks, areas, initialYe
           ) : (
             <div className="space-y-3 overflow-y-auto">
               {selectedItems.map((item) => {
+                if (item.kind === "study") {
+                  const s = item.data
+                  const time = s.plannedDate ? new Date(s.plannedDate).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : null
+                  return (
+                    <div key={s.id} className="flex items-start gap-3 p-3 rounded-xl border border-cockpit-border bg-cockpit-bg">
+                      <BookOpen size={15} className="text-violet-500 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-cockpit-text hover:text-accent truncate block">
+                          {s.title}
+                        </a>
+                        <p className="text-xs text-cockpit-muted mt-0.5">Estudo planejado{time ? ` · ${time}` : ""}</p>
+                        {s.area && (
+                          <div className="mt-1.5">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: s.area.color }}>
+                              {s.area.icon} {s.area.name}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                }
                 if (item.kind === "task") {
                   const t = item.data
                   return (
