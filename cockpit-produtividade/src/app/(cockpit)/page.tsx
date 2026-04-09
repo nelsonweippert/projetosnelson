@@ -3,19 +3,22 @@ import { getTaskStats } from "@/services/task.service"
 import { getReferenceStats } from "@/services/reference.service"
 import { getFinanceSummary } from "@/services/finance.service"
 import { getContentStats } from "@/services/content.service"
+import { redirect } from "next/navigation"
 import { CheckSquare, BookOpen, DollarSign, TrendingUp, TrendingDown, Target, Video } from "lucide-react"
 import Link from "next/link"
 import { formatCurrency } from "@/lib/utils"
 
 export default async function DashboardPage() {
   const session = await auth()
-  const userId = session?.user?.id!
+  if (!session?.user?.id) redirect("/login")
+  const userId = session.user.id
+  const now = new Date()
 
   const [taskStats, refStats, finance, contentStats] = await Promise.all([
-    getTaskStats(userId),
-    getReferenceStats(userId),
-    getFinanceSummary(userId),
-    getContentStats(userId),
+    getTaskStats(userId).catch(() => ({ todo: 0, inProgress: 0, done: 0, total: 0 })),
+    getReferenceStats(userId).catch(() => ({ total: 0, unread: 0, reading: 0, read: 0 })),
+    getFinanceSummary(userId).catch(() => ({ totalIncome: 0, totalExpense: 0, balance: 0, savingsRate: 0, month: now.getMonth() + 1, year: now.getFullYear() })),
+    getContentStats(userId).catch(() => ({ total: 0, ideas: 0, inProduction: 0, published: 0 })),
   ])
 
   const stats = [
