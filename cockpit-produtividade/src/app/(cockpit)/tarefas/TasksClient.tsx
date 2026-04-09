@@ -278,17 +278,17 @@ export function TasksClient({ initialTasks, areas }: Props) {
             </div>
           ) : (
             filtered.map((task) => (
-              <div key={task.id} className={cn("cockpit-card !p-0 overflow-hidden", task.status === "CANCELLED" && "opacity-60")}>
+              <div key={task.id} className={cn("cockpit-card !p-0 group/card hover:border-accent/30 transition-colors", task.status === "CANCELLED" && "opacity-60")}>
                 <div className="flex items-start gap-4 px-5 py-4">
                   {/* Status dropdown */}
                   <div className="relative group mt-0.5 flex-shrink-0">
                     <button
-                      className="flex items-center gap-1 p-0.5 rounded hover:bg-cockpit-surface-hover transition-colors"
+                      className="flex items-center gap-1 p-1 rounded-lg hover:bg-cockpit-surface-hover transition-colors"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {STATUS_ICON[task.status]}
                     </button>
-                    <div className="absolute left-0 top-7 z-10 hidden group-hover:flex flex-col bg-cockpit-surface border border-cockpit-border rounded-xl shadow-lg overflow-hidden min-w-[150px]">
+                    <div className="absolute left-0 top-9 z-50 hidden group-hover:flex flex-col bg-cockpit-surface border border-cockpit-border rounded-xl shadow-2xl overflow-hidden min-w-[160px]">
                       {(["TODO", "IN_PROGRESS", "DONE", "CANCELLED"] as TaskStatus[]).map((s) => (
                         <button
                           key={s}
