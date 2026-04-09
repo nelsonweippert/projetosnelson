@@ -12,11 +12,14 @@ export default async function CalendarioPage() {
   const year = now.getFullYear()
   const month = now.getMonth() + 1
 
-  const [events, tasks, areas] = await Promise.all([
-    getCalendarEvents(session.user.id, year, month),
-    getTasksWithDueDateInMonth(session.user.id, year, month),
-    getAreas(session.user.id),
+  const [eventsResult, tasksResult, areas] = await Promise.all([
+    getCalendarEvents(session.user.id, year, month).catch(() => []),
+    getTasksWithDueDateInMonth(session.user.id, year, month).catch(() => []),
+    getAreas(session.user.id).catch(() => []),
   ])
+
+  const events = eventsResult
+  const tasks = tasksResult
 
   return <CalendarioClient initialEvents={events} initialTasks={tasks} areas={areas} initialYear={year} initialMonth={month} />
 }
