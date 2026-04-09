@@ -1,7 +1,6 @@
 "use server"
 
 import { auth } from "@/lib/auth"
-import { revalidatePath } from "next/cache"
 import { createCalendarEventSchema, updateCalendarEventSchema } from "@/validations/calendar.validation"
 import {
   createCalendarEvent,
@@ -21,7 +20,6 @@ export async function createCalendarEventAction(raw: unknown): Promise<ActionRes
     const userId = await getUserId()
     const data = createCalendarEventSchema.parse(raw)
     const event = await createCalendarEvent(userId, data)
-    revalidatePath("/calendario")
     return { success: true, data: event }
   } catch (e: any) {
     return { success: false, error: e.message ?? "Erro ao criar evento" }
@@ -33,7 +31,6 @@ export async function updateCalendarEventAction(id: string, raw: unknown): Promi
     const userId = await getUserId()
     const data = updateCalendarEventSchema.parse(raw)
     const event = await updateCalendarEvent(id, userId, data)
-    revalidatePath("/calendario")
     return { success: true, data: event }
   } catch (e: any) {
     return { success: false, error: e.message ?? "Erro ao atualizar evento" }
@@ -44,7 +41,6 @@ export async function archiveCalendarEventAction(id: string): Promise<ActionResu
   try {
     const userId = await getUserId()
     await archiveCalendarEvent(id, userId)
-    revalidatePath("/calendario")
     return { success: true, data: null }
   } catch (e: any) {
     return { success: false, error: e.message ?? "Erro ao arquivar evento" }
