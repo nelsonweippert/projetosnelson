@@ -11,7 +11,6 @@ export async function getCalendarEvents(userId: string, year: number, month: num
       isArchived: false,
       date: { gte: start, lte: end },
     },
-    include: { area: true },
     orderBy: { date: "asc" },
   })
 }
@@ -30,7 +29,6 @@ export async function createCalendarEvent(userId: string, data: CreateCalendarEv
       areaId: data.areaId ?? null,
       userId,
     },
-    include: { area: true },
   })
 }
 
@@ -48,7 +46,6 @@ export async function updateCalendarEvent(id: string, userId: string, data: Upda
       ...(data.notes !== undefined && { notes: data.notes }),
       ...(data.areaId !== undefined && { areaId: data.areaId }),
     },
-    include: { area: true },
   })
 }
 

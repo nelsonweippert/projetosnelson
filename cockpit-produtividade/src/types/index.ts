@@ -119,7 +119,7 @@ export type FinanceSummary = {
 
 export type TaskWithAreas = Task & { areas: (TaskArea & { area: Area })[]; subtasks: Subtask[] }
 
-export type CalendarEventWithArea = CalendarEvent & { area: Area | null }
+export type CalendarEventWithArea = CalendarEvent & { area?: Area | null }
 
 export type TaskWithDue = Task & { areas: (TaskArea & { area: Area })[] }
 
