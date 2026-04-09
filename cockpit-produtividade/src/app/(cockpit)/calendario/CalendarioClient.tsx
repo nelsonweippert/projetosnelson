@@ -596,7 +596,7 @@ export function CalendarioClient({ initialEvents, initialTasks, areas, initialYe
                 }
 
                 const ev = item.data
-                const Icon = EVENT_TYPE_ICON[ev.type]
+                const Icon = EVENT_TYPE_ICON[ev.type as EventType]
                 const startTime = new Date(ev.date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
                 const endTime = ev.endDate ? new Date(ev.endDate).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : null
 
