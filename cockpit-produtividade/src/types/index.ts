@@ -17,6 +17,7 @@ export type {
   Content,
   ContentMetrics,
   AiInsight,
+  CalendarEvent,
   TaskStatus,
   TaskPriority,
   Recurrence,
@@ -28,26 +29,8 @@ export type {
   Platform,
   ContentFormat,
   ContentPhase,
+  EventType,
 } from "@/generated/prisma/client"
-
-export type EventType = "MEETING" | "ATA" | "ACTION" | "GENERAL"
-
-export type CalendarEvent = {
-  id: string
-  title: string
-  type: EventType
-  date: Date
-  endDate: Date | null
-  description: string | null
-  location: string | null
-  attendees: string[]
-  notes: string | null
-  isArchived: boolean
-  createdAt: Date
-  updatedAt: Date
-  userId: string
-  areaId: string | null
-}
 
 export type ActionResult<T = unknown> =
   | { success: true; data: T }

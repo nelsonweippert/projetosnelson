@@ -12,9 +12,7 @@ import {
   updateCalendarEventAction,
   archiveCalendarEventAction,
 } from "@/app/actions/calendar.actions"
-import type { CalendarEventWithArea, TaskWithDue, Area } from "@/types"
-
-type EventType = "MEETING" | "ATA" | "ACTION" | "GENERAL"
+import type { CalendarEventWithArea, TaskWithDue, Area, EventType } from "@/types"
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
