@@ -12,7 +12,9 @@ import {
   updateCalendarEventAction,
   archiveCalendarEventAction,
 } from "@/app/actions/calendar.actions"
-import type { CalendarEventWithArea, TaskWithDue, Area, EventType } from "@/types"
+import type { CalendarEventWithArea, TaskWithDue, Area } from "@/types"
+
+type EventType = "MEETING" | "ATA" | "ACTION" | "GENERAL"
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -492,7 +494,7 @@ export function CalendarioClient({ initialEvents, initialTasks, areas, initialYe
                               key={item.data.id}
                               className={cn(
                                 "text-[10px] font-medium px-1.5 py-0.5 rounded-md truncate border",
-                                EVENT_TYPE_COLOR[item.data.type]
+                                EVENT_TYPE_COLOR[item.data.type as EventType]
                               )}
                             >
                               {item.data.title}
@@ -601,7 +603,7 @@ export function CalendarioClient({ initialEvents, initialTasks, areas, initialYe
                 return (
                   <div key={ev.id} className="group p-3 rounded-xl border border-cockpit-border bg-cockpit-bg">
                     <div className="flex items-start gap-2">
-                      <div className={cn("p-1.5 rounded-lg mt-0.5 flex-shrink-0", EVENT_TYPE_COLOR[ev.type])}>
+                      <div className={cn("p-1.5 rounded-lg mt-0.5 flex-shrink-0", EVENT_TYPE_COLOR[ev.type as EventType])}>
                         <Icon size={13} />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -626,8 +628,8 @@ export function CalendarioClient({ initialEvents, initialTasks, areas, initialYe
                         </div>
 
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full border", EVENT_TYPE_COLOR[ev.type])}>
-                            {EVENT_TYPE_LABEL[ev.type]}
+                          <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full border", EVENT_TYPE_COLOR[ev.type as EventType])}>
+                            {EVENT_TYPE_LABEL[ev.type as EventType]}
                           </span>
                           <span className="text-[10px] text-cockpit-muted">
                             {startTime}{endTime ? ` – ${endTime}` : ""}
