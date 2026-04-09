@@ -79,6 +79,7 @@ export function CalendarioClient({ initialEvents, initialTasks, areas, initialYe
   const [editingEvent, setEditingEvent] = useState<CalendarEventWithArea | null>(null)
   const [isPending, startTransition] = useTransition()
   const [isLoadingMonth, setIsLoadingMonth] = useState(false)
+  const [formError, setFormError] = useState("")
 
   // Form state
   const [formTitle, setFormTitle] = useState("")
@@ -146,6 +147,7 @@ export function CalendarioClient({ initialEvents, initialTasks, areas, initialYe
 
   function openCreateForm(day?: number) {
     resetForm()
+    setFormError("")
     if (day) {
       const d = new Date(year, month - 1, day)
       const iso = d.toISOString().slice(0, 16)
@@ -189,18 +191,23 @@ export function CalendarioClient({ initialEvents, initialTasks, areas, initialYe
       areaId: formAreaId || null,
     }
 
+    setFormError("")
     startTransition(async () => {
       if (editingEvent) {
         const res = await updateCalendarEventAction(editingEvent.id, payload)
         if (res.success) {
           setEvents((prev) => prev.map((e) => e.id === editingEvent.id ? res.data as CalendarEventWithArea : e))
           resetForm()
+        } else {
+          setFormError(res.error ?? "Erro ao atualizar evento")
         }
       } else {
         const res = await createCalendarEventAction(payload)
         if (res.success) {
           setEvents((prev) => [...prev, res.data as CalendarEventWithArea])
           resetForm()
+        } else {
+          setFormError(res.error ?? "Erro ao criar evento")
         }
       }
     })
@@ -361,6 +368,10 @@ export function CalendarioClient({ initialEvents, initialTasks, areas, initialYe
                 {areas.map((a) => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
               </select>
             </div>
+          )}
+
+          {formError && (
+            <p className="text-xs text-red-500 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl">{formError}</p>
           )}
 
           <div className="flex justify-end gap-2">
