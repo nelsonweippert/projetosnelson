@@ -5,6 +5,7 @@ import { Plus, BookOpen, ExternalLink, Archive, X, Loader2, CheckCircle, Circle,
 import { cn } from "@/lib/utils"
 import { createReferenceAction, updateReferenceStatusAction, archiveReferenceAction } from "@/app/actions/reference.actions"
 import type { Area, ReferenceStatus, ReferenceType, ReferencePriority } from "@/types"
+import { DatePicker } from "@/components/ui/DatePicker"
 
 type Reference = {
   id: string
@@ -225,12 +226,7 @@ export function EstudosClient({ initialRefs, areas }: Props) {
             <label className="block text-xs text-cockpit-muted mb-1.5">
               <Calendar size={11} className="inline mr-1" />Planejar para (opcional)
             </label>
-            <input
-              type="datetime-local"
-              value={plannedDate}
-              onChange={(e) => setPlannedDate(e.target.value)}
-              className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30"
-            />
+            <DatePicker value={plannedDate} onChange={setPlannedDate} mode="datetime" />
           </div>
 
           <div>

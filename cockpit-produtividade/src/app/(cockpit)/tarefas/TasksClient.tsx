@@ -7,6 +7,7 @@ import { createTaskAction, updateTaskAction, archiveTaskAction, createSubtaskAct
 import type { Area, TaskStatus, TaskPriority } from "@/types"
 import type { TaskWithAreas } from "@/types"
 import { TaskDetailPanel } from "./TaskDetailPanel"
+import { DatePicker } from "@/components/ui/DatePicker"
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   TODO: "A fazer",
@@ -197,12 +198,7 @@ export function TasksClient({ initialTasks, areas }: Props) {
               </div>
               <div>
                 <label className="block text-xs text-cockpit-muted mb-1.5">Prazo</label>
-                <input
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30"
-                />
+                <DatePicker value={dueDate} onChange={setDueDate} />
               </div>
               <div>
                 <label className="block text-xs text-cockpit-muted mb-1.5">Tempo estimado (min)</label>

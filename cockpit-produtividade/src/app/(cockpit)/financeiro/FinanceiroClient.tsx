@@ -5,6 +5,7 @@ import { Plus, TrendingUp, TrendingDown, DollarSign, Archive, X, Loader2 } from 
 import { cn, formatCurrency, formatDate } from "@/lib/utils"
 import { createTransactionAction, archiveTransactionAction } from "@/app/actions/finance.actions"
 import type { Area, TransactionType, PaymentMethod, FinanceSummary } from "@/types"
+import { DatePicker } from "@/components/ui/DatePicker"
 
 type Transaction = {
   id: string
@@ -158,8 +159,7 @@ export function FinanceiroClient({ initialTransactions, initialSummary, areas }:
             </div>
             <div>
               <label className="block text-xs text-cockpit-muted mb-1.5">Data *</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30" />
+              <DatePicker value={date} onChange={setDate} required />
             </div>
           </div>
 

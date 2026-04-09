@@ -13,6 +13,7 @@ import {
   archiveCalendarEventAction,
 } from "@/app/actions/calendar.actions"
 import type { CalendarEventWithArea, TaskWithDue, StudyPlanned, Area } from "@/types"
+import { DatePicker } from "@/components/ui/DatePicker"
 
 type EventType = "MEETING" | "ATA" | "ACTION" | "GENERAL"
 
@@ -311,21 +312,11 @@ export function CalendarioClient({ initialEvents, initialTasks, initialStudies, 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-cockpit-muted mb-1.5">Início *</label>
-              <input
-                type="datetime-local"
-                value={formDate}
-                onChange={(e) => setFormDate(e.target.value)}
-                className="w-full px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30"
-              />
+              <DatePicker value={formDate} onChange={setFormDate} mode="datetime" required />
             </div>
             <div>
               <label className="block text-xs text-cockpit-muted mb-1.5">Fim (opcional)</label>
-              <input
-                type="datetime-local"
-                value={formEndDate}
-                onChange={(e) => setFormEndDate(e.target.value)}
-                className="w-full px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30"
-              />
+              <DatePicker value={formEndDate} onChange={setFormEndDate} mode="datetime" />
             </div>
           </div>
 

@@ -5,6 +5,7 @@ import { Plus, Video, Archive, X, Loader2, ChevronRight, ExternalLink } from "lu
 import { cn, formatDate } from "@/lib/utils"
 import { createContentAction, advanceContentPhaseAction, archiveContentAction } from "@/app/actions/content.actions"
 import type { Area, ContentPhase, Platform, ContentFormat } from "@/types"
+import { DatePicker } from "@/components/ui/DatePicker"
 
 type Content = {
   id: string
@@ -220,8 +221,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
             </div>
             <div>
               <label className="block text-xs text-cockpit-muted mb-1.5">Data planejada</label>
-              <input type="date" value={plannedDate} onChange={(e) => setPlannedDate(e.target.value)}
-                className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30" />
+              <DatePicker value={plannedDate} onChange={setPlannedDate} />
             </div>
             <div>
               <label className="block text-xs text-cockpit-muted mb-1.5">Área</label>
