@@ -16,11 +16,17 @@ export async function createReferenceAction(data: unknown): Promise<ActionResult
   try {
     const userId = await getUserId()
     const parsed = createReferenceSchema.safeParse(data)
-    if (!parsed.success) return { success: false, error: "Dados inválidos" }
+    if (!parsed.success) {
+      console.error("[createReferenceAction] validation failed:", parsed.error.flatten())
+      return { success: false, error: "Dados inválidos: " + JSON.stringify(parsed.error.flatten().fieldErrors) }
+    }
     const ref = await createReference(userId, parsed.data)
     revalidatePath("/estudos")
     return { success: true, data: ref }
-  } catch { return { success: false, error: "Erro ao salvar referência" } }
+  } catch (err) {
+    console.error("[createReferenceAction] error:", err)
+    return { success: false, error: "Erro: " + (err instanceof Error ? err.message : String(err)) }
+  }
 }
 
 export async function updateReferenceStatusAction(id: string, status: string): Promise<ActionResult> {

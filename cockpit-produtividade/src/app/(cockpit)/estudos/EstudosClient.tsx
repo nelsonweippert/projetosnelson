@@ -69,6 +69,7 @@ export function EstudosClient({ initialRefs, areas }: Props) {
   const [tagInput, setTagInput] = useState("")
   const [tags, setTags] = useState<string[]>([])
   const [plannedDate, setPlannedDate] = useState("")
+  const [formError, setFormError] = useState("")
 
   const filtered = refs.filter((r) => {
     if (r.status === "ARCHIVED") return false
@@ -87,7 +88,7 @@ export function EstudosClient({ initialRefs, areas }: Props) {
   function resetForm() {
     setTitle(""); setUrl(""); setSource(""); setType("ARTICLE")
     setPriority("NORMAL"); setAreaId(""); setTagInput(""); setTags([])
-    setPlannedDate("")
+    setPlannedDate(""); setFormError("")
     setShowForm(false)
   }
 
@@ -101,6 +102,7 @@ export function EstudosClient({ initialRefs, areas }: Props) {
 
   function handleCreate() {
     if (!title.trim() || !url.trim()) return
+    setFormError("")
     startTransition(async () => {
       const result = await createReferenceAction({
         title, url,
@@ -114,6 +116,8 @@ export function EstudosClient({ initialRefs, areas }: Props) {
       if (result.success) {
         setRefs((prev) => [result.data as Reference, ...prev])
         resetForm()
+      } else {
+        setFormError(result.error ?? "Erro desconhecido")
       }
     })
   }
@@ -248,6 +252,10 @@ export function EstudosClient({ initialRefs, areas }: Props) {
               className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30"
             />
           </div>
+
+          {formError && (
+            <p className="text-xs text-red-500 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl break-all">{formError}</p>
+          )}
 
           <div className="flex justify-end gap-2">
             <button onClick={resetForm} className="px-4 py-2 text-sm text-cockpit-muted hover:text-cockpit-text border border-cockpit-border rounded-xl transition-colors">
