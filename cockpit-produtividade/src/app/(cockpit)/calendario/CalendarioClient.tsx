@@ -157,12 +157,18 @@ export function CalendarioClient({ initialEvents, initialTasks, areas, initialYe
     setEditingEvent(null)
   }
 
+  function toLocalInput(date: Date | string): string {
+    const d = new Date(date)
+    const offset = d.getTimezoneOffset() * 60000
+    return new Date(d.getTime() - offset).toISOString().slice(0, 16)
+  }
+
   function openEditForm(ev: CalendarEventWithArea) {
     setEditingEvent(ev)
     setFormTitle(ev.title)
     setFormType(ev.type)
-    setFormDate(new Date(ev.date).toISOString().slice(0, 16))
-    setFormEndDate(ev.endDate ? new Date(ev.endDate).toISOString().slice(0, 16) : "")
+    setFormDate(toLocalInput(ev.date))
+    setFormEndDate(ev.endDate ? toLocalInput(ev.endDate) : "")
     setFormDescription(ev.description ?? "")
     setFormLocation(ev.location ?? "")
     setFormAttendees(ev.attendees.join(", "))
@@ -182,8 +188,8 @@ export function CalendarioClient({ initialEvents, initialTasks, areas, initialYe
     const payload = {
       title: formTitle.trim(),
       type: formType,
-      date: formDate,
-      endDate: formEndDate || undefined,
+      date: new Date(formDate).toISOString(),
+      endDate: formEndDate ? new Date(formEndDate).toISOString() : undefined,
       description: formDescription || undefined,
       location: formLocation || undefined,
       attendees: formAttendees ? formAttendees.split(",").map((s) => s.trim()).filter(Boolean) : [],
