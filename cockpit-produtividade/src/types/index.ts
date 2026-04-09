@@ -3,6 +3,7 @@ import type {
   TaskArea,
   Area,
   Subtask,
+  CalendarEvent,
 } from "@/generated/prisma/client"
 
 export type {
