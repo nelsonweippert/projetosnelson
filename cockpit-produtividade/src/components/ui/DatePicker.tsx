@@ -118,7 +118,7 @@ export function DatePicker({ value, onChange, mode = "date", placeholder, classN
       )}
 
       {open && (
-        <div className="absolute z-50 mt-2 bg-cockpit-surface border border-cockpit-border rounded-2xl shadow-2xl shadow-black/40 p-4 w-[310px]">
+        <div className="absolute z-50 mt-2 bg-cockpit-surface border border-cockpit-border rounded-2xl shadow-2xl shadow-black/40 p-5">
           <DayPicker
             mode="single"
             selected={selected}
@@ -126,6 +126,10 @@ export function DatePicker({ value, onChange, mode = "date", placeholder, classN
             locale={ptBR}
             showOutsideDays
             fixedWeeks
+            formatters={{
+              formatWeekdayName: (date) =>
+                date.toLocaleDateString("pt-BR", { weekday: "narrow" }),
+            }}
             components={{
               Chevron: ({ orientation }) =>
                 orientation === "left"
@@ -133,7 +137,7 @@ export function DatePicker({ value, onChange, mode = "date", placeholder, classN
                   : <ChevronRight size={16} />,
             }}
             classNames={{
-              root: "w-full",
+              root: "w-[252px]",
               months: "w-full",
               month: "w-full",
               month_caption: "flex items-center justify-center mb-3 relative",
@@ -141,13 +145,13 @@ export function DatePicker({ value, onChange, mode = "date", placeholder, classN
               nav: "flex items-center gap-1",
               button_previous: "absolute left-0 top-0 p-1.5 rounded-lg text-cockpit-muted hover:text-cockpit-text hover:bg-cockpit-surface-hover transition-colors",
               button_next: "absolute right-0 top-0 p-1.5 rounded-lg text-cockpit-muted hover:text-cockpit-text hover:bg-cockpit-surface-hover transition-colors",
-              month_grid: "w-full border-collapse",
+              month_grid: "w-full border-collapse border-spacing-0",
               weekdays: "",
-              weekday: "text-[11px] font-medium text-cockpit-muted/60 uppercase pb-2 w-10 text-center",
+              weekday: "text-[11px] font-medium text-cockpit-muted/60 uppercase pb-2 w-9 text-center",
               weeks: "",
               week: "",
-              day: "text-center p-0 relative",
-              day_button: "w-9 h-9 mx-auto flex items-center justify-center text-sm rounded-lg text-cockpit-text/80 hover:bg-accent/15 hover:text-cockpit-text transition-colors cursor-pointer",
+              day: "text-center p-0",
+              day_button: "w-9 h-9 flex items-center justify-center text-[13px] rounded-lg text-cockpit-text/80 hover:bg-accent/15 hover:text-cockpit-text transition-colors cursor-pointer",
               selected: "[&_.rdp-day_button]:bg-accent [&_.rdp-day_button]:text-black [&_.rdp-day_button]:font-semibold [&_.rdp-day_button]:hover:bg-accent-hover",
               today: "[&_.rdp-day_button]:text-accent [&_.rdp-day_button]:font-bold",
               outside: "[&_.rdp-day_button]:text-cockpit-muted/30 [&_.rdp-day_button]:hover:text-cockpit-muted/50",
