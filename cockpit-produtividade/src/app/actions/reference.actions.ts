@@ -39,6 +39,15 @@ export async function updateReferenceStatusAction(id: string, status: string): P
   } catch { return { success: false, error: "Erro ao atualizar status" } }
 }
 
+export async function updateReferenceAction(id: string, data: Record<string, unknown>): Promise<ActionResult> {
+  try {
+    const userId = await getUserId()
+    const ref = await updateReference(id, userId, data as any)
+    revalidatePath("/estudos")
+    return { success: true, data: ref }
+  } catch { return { success: false, error: "Erro ao atualizar referência" } }
+}
+
 export async function archiveReferenceAction(id: string): Promise<ActionResult> {
   try {
     const userId = await getUserId()
