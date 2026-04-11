@@ -95,6 +95,18 @@ export async function generateModuleInsight(userId: string, module: "tasks" | "f
   return content.text
 }
 
+export async function generateContentSuggestion(systemPrompt: string, userPrompt: string): Promise<string> {
+  const message = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 2048,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userPrompt }],
+  })
+  const content = message.content[0]
+  if (content.type !== "text") return "Erro ao gerar sugestão."
+  return content.text
+}
+
 export async function getAiInsights(userId: string) {
   return db.aiInsight.findMany({
     where: { userId },

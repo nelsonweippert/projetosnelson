@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useCallback, useState, useTransition } from "react"
 import {
   X, Save, Loader2, Archive, ChevronRight, ChevronLeft,
-  CheckSquare, Lightbulb, FileText, Tag, ExternalLink,
+  CheckSquare, Lightbulb, FileText, Tag, ExternalLink, Sparkles,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { updateContentAction, advanceContentPhaseAction, archiveContentAction } from "@/app/actions/content.actions"
@@ -47,7 +47,34 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   )
   const [checklist, setChecklist] = useState<Record<string, boolean>>(content.checklist ?? {})
 
+  // AI
+  const [aiLoading, setAiLoading] = useState<string | null>(null)
+  const [aiResult, setAiResult] = useState<string | null>(null)
+  const [aiAction, setAiAction] = useState<string | null>(null)
+
   const hasChanges = titleChanged || hookChanged || scriptChanged || researchChanged || thumbChanged || notesChanged
+
+  const callAI = useCallback(async (action: string) => {
+    setAiLoading(action); setAiResult(null); setAiAction(action)
+    try {
+      const res = await fetch("/api/content/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action, skill: content.skill, phase: content.phase,
+          title: content.title, hook, script, notes, research,
+          series: content.series,
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setAiResult(data.result)
+      } else {
+        setAiResult("Erro ao gerar sugestão. Verifique a ANTHROPIC_API_KEY.")
+      }
+    } catch { setAiResult("Erro de conexão.") }
+    setAiLoading(null)
+  }, [content.skill, content.phase, content.title, hook, script, notes, research, content.series])
 
   function save(data: Record<string, unknown>) {
     startTransition(async () => {
@@ -104,6 +131,17 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   const checklistItems = currentPhaseConfig?.checklist ?? []
   const checkedCount = checklistItems.filter((item) => checklist[`${content.phase}_${item.label}`]).length
   const totalChecklist = checklistItems.length
+
+  function AiButton({ action, label }: { action: string; label: string }) {
+    return (
+      <button onClick={() => callAI(action)} disabled={!!aiLoading}
+        className={cn("flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-all",
+          aiLoading === action ? "bg-accent/10 border-accent/30 text-accent" : "border-cockpit-border text-cockpit-muted hover:border-accent/30 hover:text-accent"
+        )}>
+        {aiLoading === action ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />} {label}
+      </button>
+    )
+  }
 
   return (
     <>
@@ -215,7 +253,10 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-medium text-cockpit-muted">Hook (gancho)</p>
-                {hookChanged && <button onClick={() => { save({ hook: hook || null }); setHookChanged(false) }} className="text-xs text-accent-dark hover:text-accent flex items-center gap-1"><Save size={11} /> Salvar</button>}
+                <div className="flex items-center gap-2">
+                  <AiButton action="generate_hook" label="Gerar hooks" />
+                  {hookChanged && <button onClick={() => { save({ hook: hook || null }); setHookChanged(false) }} className="text-xs text-accent-dark hover:text-accent flex items-center gap-1"><Save size={11} /> Salvar</button>}
+                </div>
               </div>
               <textarea value={hook} onChange={(e) => { setHook(e.target.value); setHookChanged(true) }}
                 placeholder="Qual é o gancho dos primeiros segundos?"
@@ -228,7 +269,10 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-medium text-cockpit-muted">Pesquisa / Referências</p>
-                {researchChanged && <button onClick={() => { save({ research: research || null }); setResearchChanged(false) }} className="text-xs text-accent-dark hover:text-accent flex items-center gap-1"><Save size={11} /> Salvar</button>}
+                <div className="flex items-center gap-2">
+                  <AiButton action="generate_research" label="Sugerir pesquisa" />
+                  {researchChanged && <button onClick={() => { save({ research: research || null }); setResearchChanged(false) }} className="text-xs text-accent-dark hover:text-accent flex items-center gap-1"><Save size={11} /> Salvar</button>}
+                </div>
               </div>
               <textarea value={research} onChange={(e) => { setResearch(e.target.value); setResearchChanged(true) }}
                 placeholder="Links, dados, fontes, notas de pesquisa..."
@@ -241,7 +285,11 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-medium text-cockpit-muted flex items-center gap-1"><FileText size={12} /> Roteiro</p>
-                {scriptChanged && <button onClick={() => { save({ script: script || null }); setScriptChanged(false) }} className="text-xs text-accent-dark hover:text-accent flex items-center gap-1"><Save size={11} /> Salvar</button>}
+                <div className="flex items-center gap-2">
+                  <AiButton action="generate_script" label="Gerar roteiro" />
+                  <AiButton action="generate_titles" label="Gerar títulos" />
+                  {scriptChanged && <button onClick={() => { save({ script: script || null }); setScriptChanged(false) }} className="text-xs text-accent-dark hover:text-accent flex items-center gap-1"><Save size={11} /> Salvar</button>}
+                </div>
               </div>
               <textarea value={script} onChange={(e) => { setScript(e.target.value); setScriptChanged(true) }}
                 placeholder="Escreva o roteiro completo aqui..."
@@ -270,11 +318,55 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-medium text-cockpit-muted">Thumbnail & Título</p>
-                {thumbChanged && <button onClick={() => { save({ thumbnailNotes: thumbnailNotes || null }); setThumbChanged(false) }} className="text-xs text-accent-dark hover:text-accent flex items-center gap-1"><Save size={11} /> Salvar</button>}
+                <div className="flex items-center gap-2">
+                  <AiButton action="generate_thumbnail" label="Gerar arte" />
+                  {thumbChanged && <button onClick={() => { save({ thumbnailNotes: thumbnailNotes || null }); setThumbChanged(false) }} className="text-xs text-accent-dark hover:text-accent flex items-center gap-1"><Save size={11} /> Salvar</button>}
+                </div>
               </div>
               <textarea value={thumbnailNotes} onChange={(e) => { setThumbnailNotes(e.target.value); setThumbChanged(true) }}
                 placeholder="Notas da thumbnail: expressão facial, texto, cores, composição..."
                 rows={4} className="w-full px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none" />
+            </div>
+          )}
+
+          {/* AI Review button */}
+          {content.phase === "REVIEW" && (
+            <div className="flex justify-center">
+              <button onClick={() => callAI("review")} disabled={!!aiLoading}
+                className="flex items-center gap-2 px-4 py-2.5 bg-accent/10 text-accent text-xs font-semibold border border-accent/20 rounded-xl hover:bg-accent/20 transition-colors disabled:opacity-50">
+                {aiLoading === "review" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Revisar conteúdo com IA
+              </button>
+            </div>
+          )}
+
+          {/* AI Result Panel */}
+          {aiResult && (
+            <div className="rounded-xl border border-accent/30 bg-accent/5 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-accent/20">
+                <p className="text-[11px] font-semibold text-accent flex items-center gap-1"><Sparkles size={12} /> Sugestão da IA</p>
+                <button onClick={() => { setAiResult(null); setAiAction(null) }} className="text-cockpit-muted hover:text-cockpit-text"><X size={13} /></button>
+              </div>
+              <div className="px-4 py-3 text-sm text-cockpit-text whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">{aiResult}</div>
+              <div className="flex items-center gap-2 px-4 py-2 border-t border-accent/20">
+                {aiAction === "generate_hook" && (
+                  <button onClick={() => { setHook(aiResult); setHookChanged(true); setAiResult(null) }}
+                    className="text-[11px] text-accent font-medium hover:underline">Usar como hook</button>
+                )}
+                {aiAction === "generate_script" && (
+                  <button onClick={() => { setScript(aiResult); setScriptChanged(true); setAiResult(null) }}
+                    className="text-[11px] text-accent font-medium hover:underline">Usar como roteiro</button>
+                )}
+                {aiAction === "generate_research" && (
+                  <button onClick={() => { setResearch(aiResult); setResearchChanged(true); setAiResult(null) }}
+                    className="text-[11px] text-accent font-medium hover:underline">Usar como pesquisa</button>
+                )}
+                {aiAction === "generate_thumbnail" && (
+                  <button onClick={() => { setThumbnailNotes(aiResult); setThumbChanged(true); setAiResult(null) }}
+                    className="text-[11px] text-accent font-medium hover:underline">Usar como notas de arte</button>
+                )}
+                <button onClick={() => { setAiResult(null); setAiAction(null) }}
+                  className="text-[11px] text-cockpit-muted hover:text-cockpit-text ml-auto">Descartar</button>
+              </div>
             </div>
           )}
 
