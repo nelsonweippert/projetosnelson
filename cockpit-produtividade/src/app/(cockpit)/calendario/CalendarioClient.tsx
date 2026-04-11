@@ -478,25 +478,20 @@ export function CalendarioClient({ initialEvents, initialTasks, initialStudies, 
                   const KindIcon = KIND_ICON[item.kind]
 
                   return (
-                    <div key={item.data.id + item.kind} className="flex items-center gap-3 px-4 py-2.5 hover:bg-cockpit-surface-hover transition-colors">
-                      <div className={cn("w-8 text-right flex-shrink-0")}>
-                        <p className={cn("text-xs font-bold", isToday ? "text-accent" : "text-cockpit-text")}>{dateLabel}</p>
-                        <p className="text-[10px] text-cockpit-muted">{time}</p>
-                      </div>
-                      <div className={cn("w-0.5 h-8 rounded-full flex-shrink-0", KIND_DOT[item.kind])} />
+                    <div key={item.data.id + item.kind} className="flex items-center gap-3 px-4 py-3 hover:bg-cockpit-surface-hover transition-colors">
+                      <div className={cn("w-1 self-stretch rounded-full flex-shrink-0", KIND_DOT[item.kind])} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-cockpit-text truncate">{item.data.title}</p>
-                        <p className="text-[10px] text-cockpit-muted flex items-center gap-1">
-                          <KindIcon size={10} />
-                          {item.kind === "event" && EVENT_TYPE_LABEL[(item.data as CalendarEventWithArea).type as EventType]}
-                          {item.kind === "task" && "Tarefa"}
-                          {item.kind === "study" && "Estudo"}
-                          {item.kind === "event" && (item.data as CalendarEventWithArea).area && (
-                            <span className="ml-1 px-1.5 py-0 rounded-full text-white text-[9px]" style={{ backgroundColor: (item.data as CalendarEventWithArea).area!.color }}>
-                              {(item.data as CalendarEventWithArea).area!.icon}
-                            </span>
-                          )}
-                        </p>
+                        <p className="text-sm font-medium text-cockpit-text truncate">{item.data.title}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={cn("text-[11px] font-semibold", isToday ? "text-accent" : "text-cockpit-muted")}>{dateLabel}</span>
+                          <span className="text-[10px] text-cockpit-muted">{time}</span>
+                          <span className="text-[10px] text-cockpit-muted flex items-center gap-0.5">
+                            <KindIcon size={10} />
+                            {item.kind === "event" && EVENT_TYPE_LABEL[(item.data as CalendarEventWithArea).type as EventType]}
+                            {item.kind === "task" && "Tarefa"}
+                            {item.kind === "study" && "Estudo"}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )
@@ -519,18 +514,15 @@ export function CalendarioClient({ initialEvents, initialTasks, initialStudies, 
                   const t = item.data as TaskWithDue
                   const daysLate = Math.floor((new Date().getTime() - item.date.getTime()) / 86400000)
                   return (
-                    <div key={t.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-cockpit-surface-hover transition-colors">
-                      <div className="w-8 text-right flex-shrink-0">
-                        <p className="text-xs font-bold text-red-400">{daysLate}d</p>
-                        <p className="text-[10px] text-red-400/60">atraso</p>
-                      </div>
-                      <div className="w-0.5 h-8 rounded-full bg-red-500 flex-shrink-0" />
+                    <div key={t.id} className="flex items-center gap-3 px-4 py-3 hover:bg-cockpit-surface-hover transition-colors">
+                      <div className="w-1 self-stretch rounded-full bg-red-500 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-cockpit-text truncate">{t.title}</p>
-                        <div className="flex items-center gap-1 mt-0.5">
+                        <p className="text-sm font-medium text-cockpit-text truncate">{t.title}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[11px] font-semibold text-red-400">{daysLate}d atraso</span>
                           <span className="text-[10px] text-cockpit-muted">Prazo: {item.date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>
                           {t.areas.length > 0 && t.areas.map(({ area }) => (
-                            <span key={area.id} className="px-1.5 py-0 rounded-full text-white text-[9px]" style={{ backgroundColor: area.color }}>{area.icon}</span>
+                            <span key={area.id} className="px-1.5 py-0.5 rounded-full text-white text-[9px]" style={{ backgroundColor: area.color }}>{area.icon} {area.name}</span>
                           ))}
                         </div>
                       </div>
