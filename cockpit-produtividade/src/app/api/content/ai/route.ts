@@ -145,6 +145,26 @@ Para cada um descreva:
 Numere cada conceito.`
       break
 
+    case "generate_description":
+      prompt = `${aiContext}
+
+Contexto do conteúdo:
+- Tipo: ${skillConfig?.label ?? "Geral"}
+- Título: ${title ?? "Não definido"}
+${hook ? `- Hook: ${hook}` : ""}
+${script ? `- Roteiro (resumo): ${script.substring(0, 500)}` : ""}
+${notes ? `- Notas: ${notes}` : ""}
+
+Gere uma DESCRIÇÃO/CAPTION completa para publicação na plataforma.
+Inclua:
+1. Descrição otimizada para SEO (keywords naturais no texto)
+2. Call-to-action
+3. 10-15 hashtags relevantes (mix de tamanhos)
+4. Se YouTube: inclua timestamps/capítulos sugeridos
+
+Formate a descrição pronta para copiar e colar na plataforma.`
+      break
+
     case "review":
       prompt = `${aiContext}
 

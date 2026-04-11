@@ -19,23 +19,26 @@ import { ContentDetailPanel } from "./ContentDetailPanel"
 type Content = any
 
 const PHASE_LABEL: Record<string, string> = {
-  IDEA: "Ideia", RESEARCH: "Pesquisa", SCRIPT: "Roteiro", RECORDING: "Gravação",
-  EDITING: "Edição", THUMBNAIL: "Thumb/Título", REVIEW: "Revisão",
-  SCHEDULED: "Agendado", PUBLISHED: "Publicado", ARCHIVED: "Arquivado",
+  IDEA: "Ideação", RESEARCH: "Pesquisa", SCRIPT: "Roteiro", TITLE: "Título",
+  THUMBNAIL: "Thumbnail", DESCRIPTION: "Descrição", RECORDING: "Gravação",
+  EDITING: "Edição", REVIEW: "Revisão", SCHEDULED: "Agendado",
+  PUBLISHED: "Publicado", ARCHIVED: "Arquivado",
 }
 const PHASE_COLOR: Record<string, string> = {
   IDEA: "bg-violet-500/15 text-violet-500 border-violet-500/20",
   RESEARCH: "bg-blue-500/15 text-blue-500 border-blue-500/20",
   SCRIPT: "bg-amber-500/15 text-amber-500 border-amber-500/20",
+  TITLE: "bg-orange-500/15 text-orange-500 border-orange-500/20",
+  THUMBNAIL: "bg-pink-500/15 text-pink-500 border-pink-500/20",
+  DESCRIPTION: "bg-cyan-500/15 text-cyan-500 border-cyan-500/20",
   RECORDING: "bg-red-500/15 text-red-500 border-red-500/20",
-  EDITING: "bg-pink-500/15 text-pink-500 border-pink-500/20",
-  THUMBNAIL: "bg-orange-500/15 text-orange-500 border-orange-500/20",
-  REVIEW: "bg-cyan-500/15 text-cyan-500 border-cyan-500/20",
-  SCHEDULED: "bg-emerald-500/15 text-emerald-500 border-emerald-500/20",
+  EDITING: "bg-rose-500/15 text-rose-500 border-rose-500/20",
+  REVIEW: "bg-emerald-500/15 text-emerald-500 border-emerald-500/20",
+  SCHEDULED: "bg-teal-500/15 text-teal-500 border-teal-500/20",
   PUBLISHED: "bg-accent/15 text-accent-dark border-accent/20",
 }
 const SKILL_ICON: Record<string, string> = { SHORT_VIDEO: "⚡", LONG_VIDEO: "🎬", INSTAGRAM: "📸" }
-const PIPELINE_PHASES: ContentPhase[] = ["IDEA", "RESEARCH", "SCRIPT", "RECORDING", "EDITING", "THUMBNAIL", "REVIEW", "SCHEDULED", "PUBLISHED"]
+const PIPELINE_PHASES: ContentPhase[] = ["IDEA", "RESEARCH", "SCRIPT", "TITLE", "THUMBNAIL", "DESCRIPTION", "RECORDING", "EDITING", "REVIEW", "SCHEDULED", "PUBLISHED"]
 
 type Tab = "overview" | "pipeline" | "ideas" | "skills"
 type ViewMode = "pipeline" | "list"

@@ -281,9 +281,11 @@ enum ContentPhase {
   IDEA
   RESEARCH
   SCRIPT
+  TITLE
+  THUMBNAIL
+  DESCRIPTION
   RECORDING
   EDITING
-  THUMBNAIL
   REVIEW
   SCHEDULED
   PUBLISHED
@@ -309,6 +311,9 @@ model Content {
   tags           String[]
   thumbnailNotes String?
   research       String?
+  titleOptions   String[]
+  description    String?
+  hashtags       String[]
   checklist      Json?
   plannedDate    DateTime?
   publishedAt    DateTime?
