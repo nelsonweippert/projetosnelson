@@ -61,6 +61,7 @@ export function TaskDetailPanel({ task, areas, onClose, onUpdate, onArchive }: P
 
   const [notes, setNotes] = useState(task.notes ?? "")
   const [description, setDescription] = useState(task.description ?? "")
+  const [localAreaIds, setLocalAreaIds] = useState<string[]>(task.areas.map(({ area }) => area.id))
   const [notesChanged, setNotesChanged] = useState(false)
   const [descChanged, setDescChanged] = useState(false)
   const [title, setTitle] = useState(task.title)
@@ -68,6 +69,19 @@ export function TaskDetailPanel({ task, areas, onClose, onUpdate, onArchive }: P
   const [subtaskInput, setSubtaskInput] = useState("")
   const [localSubtasks, setLocalSubtasks] = useState(task.subtasks)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function handleToggleArea(areaId: string) {
+    const next = localAreaIds.includes(areaId)
+      ? localAreaIds.filter((id) => id !== areaId)
+      : [...localAreaIds, areaId]
+    setLocalAreaIds(next)
+    startTransition(async () => {
+      const result = await updateTaskAction(task.id, { areaIds: next })
+      if (result.success) {
+        onUpdate(result.data as TaskWithAreas)
+      }
+    })
+  }
 
   function handleSaveTitle() {
     if (!title.trim() || title === task.title) { setTitleChanged(false); return }
@@ -242,6 +256,29 @@ export function TaskDetailPanel({ task, areas, onClose, onUpdate, onArchive }: P
                 ))}
               </div>
             </div>
+
+            {areas.length > 0 && (
+              <div>
+                <p className="text-xs text-cockpit-muted mb-2 font-medium">Área</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {areas.map((area) => (
+                    <button
+                      key={area.id}
+                      onClick={() => handleToggleArea(area.id)}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                        localAreaIds.includes(area.id)
+                          ? "border-transparent text-white"
+                          : "border-cockpit-border text-cockpit-muted hover:border-cockpit-text/30"
+                      )}
+                      style={localAreaIds.includes(area.id) ? { backgroundColor: area.color } : undefined}
+                    >
+                      {area.icon} {area.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Meta info */}
