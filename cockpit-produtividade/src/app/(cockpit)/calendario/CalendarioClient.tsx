@@ -317,6 +317,29 @@ export function CalendarioClient({ initialEvents, initialTasks, initialStudies, 
     return grouped
   }, [filteredItems, month, year])
 
+  // ── Overview data ──────────────────────────────────────────────────────
+
+  const upcomingItems = useMemo(() => {
+    const now = new Date()
+    now.setHours(0, 0, 0, 0)
+    return allItems
+      .filter((item) => item.date >= now)
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .slice(0, 5)
+  }, [allItems])
+
+  const overdueTaskItems = useMemo(() => {
+    const now = new Date()
+    now.setHours(0, 0, 0, 0)
+    return allItems
+      .filter((item) => {
+        if (item.kind !== "task") return false
+        const t = item.data as TaskWithDue
+        return item.date < now && t.status !== "DONE" && t.status !== "CANCELLED"
+      })
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+  }, [allItems])
+
   // ── Render helpers ─────────────────────────────────────────────────────
 
   const selectedItems = selectedDay ? getItemsForDay(selectedDay) : []
@@ -433,6 +456,92 @@ export function CalendarioClient({ initialEvents, initialTasks, initialStudies, 
           <p className="text-2xl font-bold text-accent mt-1">{counts.upcoming}</p>
         </button>
       </div>
+
+      {/* Overview: próximos + atrasadas */}
+      {(upcomingItems.length > 0 || overdueTaskItems.length > 0) && (
+        <div className={cn("grid gap-4", overdueTaskItems.length > 0 && upcomingItems.length > 0 ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1")}>
+          {/* Próximos */}
+          {upcomingItems.length > 0 && (
+            <div className="cockpit-card !p-0 overflow-hidden">
+              <div className="px-4 py-3 border-b border-cockpit-border flex items-center justify-between">
+                <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider flex items-center gap-1.5">
+                  <Calendar size={13} className="text-accent" /> Próximos
+                </h3>
+                <span className="text-[10px] text-cockpit-muted">{counts.upcoming} total</span>
+              </div>
+              <div className="divide-y divide-cockpit-border">
+                {upcomingItems.map((item) => {
+                  const isToday = item.date.toDateString() === new Date().toDateString()
+                  const isTomorrow = (() => { const t = new Date(); t.setDate(t.getDate() + 1); return item.date.toDateString() === t.toDateString() })()
+                  const dateLabel = isToday ? "Hoje" : isTomorrow ? "Amanhã" : item.date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+                  const time = item.date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+                  const KindIcon = KIND_ICON[item.kind]
+
+                  return (
+                    <div key={item.data.id + item.kind} className="flex items-center gap-3 px-4 py-2.5 hover:bg-cockpit-surface-hover transition-colors">
+                      <div className={cn("w-8 text-right flex-shrink-0")}>
+                        <p className={cn("text-xs font-bold", isToday ? "text-accent" : "text-cockpit-text")}>{dateLabel}</p>
+                        <p className="text-[10px] text-cockpit-muted">{time}</p>
+                      </div>
+                      <div className={cn("w-0.5 h-8 rounded-full flex-shrink-0", KIND_DOT[item.kind])} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-cockpit-text truncate">{item.data.title}</p>
+                        <p className="text-[10px] text-cockpit-muted flex items-center gap-1">
+                          <KindIcon size={10} />
+                          {item.kind === "event" && EVENT_TYPE_LABEL[(item.data as CalendarEventWithArea).type as EventType]}
+                          {item.kind === "task" && "Tarefa"}
+                          {item.kind === "study" && "Estudo"}
+                          {item.kind === "event" && (item.data as CalendarEventWithArea).area && (
+                            <span className="ml-1 px-1.5 py-0 rounded-full text-white text-[9px]" style={{ backgroundColor: (item.data as CalendarEventWithArea).area!.color }}>
+                              {(item.data as CalendarEventWithArea).area!.icon}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Tarefas atrasadas */}
+          {overdueTaskItems.length > 0 && (
+            <div className="cockpit-card !p-0 overflow-hidden !border-red-500/20">
+              <div className="px-4 py-3 border-b border-red-500/20 bg-red-500/[0.03] flex items-center justify-between">
+                <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <AlertTriangle size={13} /> Tarefas em atraso
+                </h3>
+                <span className="text-[10px] text-red-400/70">{overdueTaskItems.length} tarefa{overdueTaskItems.length !== 1 ? "s" : ""}</span>
+              </div>
+              <div className="divide-y divide-cockpit-border">
+                {overdueTaskItems.map((item) => {
+                  const t = item.data as TaskWithDue
+                  const daysLate = Math.floor((new Date().getTime() - item.date.getTime()) / 86400000)
+                  return (
+                    <div key={t.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-cockpit-surface-hover transition-colors">
+                      <div className="w-8 text-right flex-shrink-0">
+                        <p className="text-xs font-bold text-red-400">{daysLate}d</p>
+                        <p className="text-[10px] text-red-400/60">atraso</p>
+                      </div>
+                      <div className="w-0.5 h-8 rounded-full bg-red-500 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-cockpit-text truncate">{t.title}</p>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="text-[10px] text-cockpit-muted">Prazo: {item.date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>
+                          {t.areas.length > 0 && t.areas.map(({ area }) => (
+                            <span key={area.id} className="px-1.5 py-0 rounded-full text-white text-[9px]" style={{ backgroundColor: area.color }}>{area.icon}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Search + filters + view mode */}
       <div className="flex items-center gap-2">
