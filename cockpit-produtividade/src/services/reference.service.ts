@@ -2,23 +2,29 @@ import { db } from "@/lib/db"
 import type { CreateReferenceInput } from "@/types"
 import type { ReferenceStatus, ReferenceType, ReferencePriority } from "@/generated/prisma/client"
 
+const INCLUDE_AREAS = { areas: { include: { area: true } }, area: true }
+
 export async function getReferences(userId: string) {
   return db.reference.findMany({
     where: { userId, isArchived: false },
-    include: { area: true },
+    include: INCLUDE_AREAS,
     orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
   })
 }
 
 export async function createReference(userId: string, data: CreateReferenceInput) {
-  const { plannedDate, ...rest } = data
+  const { plannedDate, areaIds, ...rest } = data as CreateReferenceInput & { areaIds?: string[] }
   return db.reference.create({
     data: {
       ...rest,
       plannedDate: plannedDate ? new Date(plannedDate) : null,
       userId,
+      ...(areaIds && areaIds.length > 0 && {
+        areas: { create: areaIds.map((areaId) => ({ areaId })) },
+        areaId: areaIds[0], // backwards compat
+      }),
     },
-    include: { area: true },
+    include: INCLUDE_AREAS,
   })
 }
 
@@ -31,7 +37,7 @@ export async function getStudiesPlannedInMonth(userId: string, year: number, mon
       isArchived: false,
       plannedDate: { gte: start, lte: end },
     },
-    include: { area: true },
+    include: INCLUDE_AREAS,
     orderBy: { plannedDate: "asc" },
   })
 }
@@ -48,14 +54,25 @@ export async function updateReference(id: string, userId: string, data: {
   highlights?: string[]
   readAt?: Date | null
   areaId?: string | null
+  areaIds?: string[]
 }) {
-  const { areaId, ...rest } = data
+  const { areaId, areaIds, ...rest } = data
   return db.reference.update({
     where: { id, userId },
     data: {
       ...rest,
-      ...(areaId !== undefined && { area: areaId ? { connect: { id: areaId } } : { disconnect: true } }),
+      ...(areaIds !== undefined && {
+        areas: {
+          deleteMany: {},
+          create: areaIds.map((areaId) => ({ areaId })),
+        },
+        areaId: areaIds.length > 0 ? areaIds[0] : null,
+      }),
+      ...(areaIds === undefined && areaId !== undefined && {
+        areaId: areaId || null,
+      }),
     },
+    include: INCLUDE_AREAS,
   })
 }
 

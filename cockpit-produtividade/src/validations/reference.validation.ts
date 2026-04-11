@@ -8,6 +8,7 @@ export const createReferenceSchema = z.object({
   priority: z.enum(["HIGH", "NORMAL", "LOW"]).default("NORMAL"),
   tags: z.array(z.string()).default([]),
   areaId: z.string().optional().nullable(),
+  areaIds: z.array(z.string()).default([]),
   plannedDate: z.string().optional().nullable(),
 })
 

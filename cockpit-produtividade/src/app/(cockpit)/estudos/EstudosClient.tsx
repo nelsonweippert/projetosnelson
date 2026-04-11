@@ -12,6 +12,8 @@ import type { Area, ReferenceStatus, ReferenceType, ReferencePriority } from "@/
 import { DatePicker } from "@/components/ui/DatePicker"
 import { ReferenceDetailPanel } from "./ReferenceDetailPanel"
 
+type AreaRef = { id: string; name: string; color: string; icon: string }
+
 type Reference = {
   id: string
   title: string
@@ -25,7 +27,8 @@ type Reference = {
   highlights?: string[]
   plannedDate?: string | Date | null
   createdAt: string | Date
-  area?: { id: string; name: string; color: string; icon: string } | null
+  area?: AreaRef | null
+  areas?: { area: AreaRef }[]
 }
 
 const STATUS_LABEL: Record<ReferenceStatus, string> = { UNREAD: "Para ler", READING: "Lendo", READ: "Lido", ARCHIVED: "Arquivado" }
@@ -78,7 +81,7 @@ export function EstudosClient({ initialRefs, areas }: Props) {
   const [source, setSource] = useState("")
   const [type, setType] = useState<ReferenceType>("ARTICLE")
   const [priority, setPriority] = useState<ReferencePriority>("NORMAL")
-  const [areaId, setAreaId] = useState("")
+  const [selectedAreaIds, setSelectedAreaIds] = useState<string[]>([])
   const [tagInput, setTagInput] = useState("")
   const [tags, setTags] = useState<string[]>([])
   const [plannedDate, setPlannedDate] = useState("")
@@ -105,7 +108,8 @@ export function EstudosClient({ initialRefs, areas }: Props) {
       status[r.status] = (status[r.status] || 0) + 1
       type[r.type] = (type[r.type] || 0) + 1
       prio[r.priority] = (prio[r.priority] || 0) + 1
-      if (r.area) area[r.area.id] = (area[r.area.id] || 0) + 1
+      const refAreas = r.areas?.map(({ area: a }) => a) ?? (r.area ? [r.area] : [])
+      for (const a of refAreas) area[a.id] = (area[a.id] || 0) + 1
     }
     return { total: active.length, status, type, prio, area }
   }, [refs])
@@ -121,7 +125,10 @@ export function EstudosClient({ initialRefs, areas }: Props) {
     if (statusFilters.length > 0) result = result.filter((r) => statusFilters.includes(r.status))
     if (typeFilters.length > 0) result = result.filter((r) => typeFilters.includes(r.type))
     if (priorityFilters.length > 0) result = result.filter((r) => priorityFilters.includes(r.priority))
-    if (areaFilters.length > 0) result = result.filter((r) => r.area && areaFilters.includes(r.area.id))
+    if (areaFilters.length > 0) result = result.filter((r) => {
+      const refAreas = r.areas?.map(({ area }) => area.id) ?? (r.area ? [r.area.id] : [])
+      return refAreas.some((id) => areaFilters.includes(id))
+    })
 
     const sorted = [...result]
     switch (sortKey) {
@@ -142,7 +149,7 @@ export function EstudosClient({ initialRefs, areas }: Props) {
 
   function resetForm() {
     setTitle(""); setUrl(""); setSource(""); setType("ARTICLE"); setPriority("NORMAL")
-    setAreaId(""); setTagInput(""); setTags([]); setPlannedDate(""); setFormError(""); setShowForm(false)
+    setSelectedAreaIds([]); setTagInput(""); setTags([]); setPlannedDate(""); setFormError(""); setShowForm(false)
   }
 
   function addTag(e: React.KeyboardEvent) {
@@ -155,7 +162,7 @@ export function EstudosClient({ initialRefs, areas }: Props) {
     if (!title.trim() || !url.trim()) return
     setFormError("")
     startTransition(async () => {
-      const result = await createReferenceAction({ title, url, source: source || undefined, type, priority, tags, areaId: areaId || null, plannedDate: plannedDate ? new Date(plannedDate).toISOString() : null })
+      const result = await createReferenceAction({ title, url, source: source || undefined, type, priority, tags, areaIds: selectedAreaIds, plannedDate: plannedDate ? new Date(plannedDate).toISOString() : null })
       if (result.success) { setRefs((prev) => [result.data as Reference, ...prev]); resetForm() }
       else setFormError(result.error ?? "Erro desconhecido")
     })
@@ -353,7 +360,11 @@ export function EstudosClient({ initialRefs, areas }: Props) {
               <div><label className="block text-xs text-cockpit-muted mb-1.5">Fonte</label><input type="text" value={source} onChange={(e) => setSource(e.target.value)} placeholder="Ex: YouTube" className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30" /></div>
               <div><label className="block text-xs text-cockpit-muted mb-1.5">Tipo</label><select value={type} onChange={(e) => setType(e.target.value as ReferenceType)} className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30"><option value="ARTICLE">Artigo</option><option value="VIDEO">Vídeo</option><option value="BLOG">Blog</option><option value="PODCAST">Podcast</option><option value="DOCUMENT">Documento</option><option value="OTHER">Outro</option></select></div>
               <div><label className="block text-xs text-cockpit-muted mb-1.5">Prioridade</label><select value={priority} onChange={(e) => setPriority(e.target.value as ReferencePriority)} className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30"><option value="HIGH">Alta</option><option value="NORMAL">Normal</option><option value="LOW">Baixa</option></select></div>
-              <div><label className="block text-xs text-cockpit-muted mb-1.5">Área</label><select value={areaId} onChange={(e) => setAreaId(e.target.value)} className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30"><option value="">Nenhuma</option>{areas.map((a) => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}</select></div>
+              <div><label className="block text-xs text-cockpit-muted mb-1.5">Áreas</label><div className="flex flex-wrap gap-1.5 mt-1">{areas.map((a) => (
+                <button key={a.id} type="button" onClick={() => setSelectedAreaIds((prev) => prev.includes(a.id) ? prev.filter((id) => id !== a.id) : [...prev, a.id])}
+                  className={cn("flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all", selectedAreaIds.includes(a.id) ? "border-transparent text-white" : "border-cockpit-border text-cockpit-muted hover:border-cockpit-text/30")}
+                  style={selectedAreaIds.includes(a.id) ? { backgroundColor: a.color } : {}}>{a.icon} {a.name}</button>
+              ))}</div></div>
             </div>
             <div><label className="block text-xs text-cockpit-muted mb-1.5"><Calendar size={11} className="inline mr-1" />Planejar para (opcional)</label><DatePicker value={plannedDate} onChange={setPlannedDate} mode="datetime" /></div>
             <div>
@@ -411,7 +422,9 @@ export function EstudosClient({ initialRefs, areas }: Props) {
                     <div className="flex flex-wrap items-center gap-2 mt-2">
                       <span className="text-[11px] text-cockpit-muted">{TYPE_LABEL[ref.type]}</span>
                       {ref.priority === "HIGH" && <span className={cn("text-xs px-2.5 py-1 rounded-full font-medium", PRIORITY_COLOR.HIGH)}>Prioritário</span>}
-                      {ref.area && <span className="text-xs px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: ref.area.color }}>{ref.area.icon} {ref.area.name}</span>}
+                      {(ref.areas && ref.areas.length > 0 ? ref.areas.map(({ area }) => area) : ref.area ? [ref.area] : []).map((a) => (
+                        <span key={a.id} className="text-xs px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: a.color }}>{a.icon} {a.name}</span>
+                      ))}
                       {ref.plannedDate && (
                         <span className="text-xs px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-600 flex items-center gap-1">
                           <Calendar size={11} />{new Date(ref.plannedDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}

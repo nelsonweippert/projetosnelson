@@ -48,11 +48,14 @@ model Area {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  taskAreas      TaskArea[]
-  transactions   Transaction[]
-  references     Reference[]
-  contents       Content[]
-  calendarEvents CalendarEvent[]
+  taskAreas          TaskArea[]
+  transactions       Transaction[]
+  references         Reference[]
+  contents           Content[]
+  calendarEvents     CalendarEvent[]
+  referenceAreas     ReferenceArea[]
+  contentAreas       ContentArea[]
+  calendarEventAreas CalendarEventArea[]
 
   @@index([userId])
   @@map("areas")
@@ -235,10 +238,21 @@ model Reference {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   areaId String?
   area   Area?  @relation(fields: [areaId], references: [id])
+  areas  ReferenceArea[]
 
   @@index([userId, status])
   @@index([userId, plannedDate])
   @@map("references")
+}
+
+model ReferenceArea {
+  referenceId String
+  areaId      String
+  reference   Reference @relation(fields: [referenceId], references: [id], onDelete: Cascade)
+  area        Area      @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@id([referenceId, areaId])
+  @@map("reference_areas")
 }
 
 // ========================================
@@ -294,10 +308,21 @@ model Content {
   user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   areaId  String?
   area    Area?          @relation(fields: [areaId], references: [id])
+  areas   ContentArea[]
   metrics ContentMetrics?
 
   @@index([userId, phase])
   @@map("contents")
+}
+
+model ContentArea {
+  contentId String
+  areaId    String
+  content   Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  area      Area    @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@id([contentId, areaId])
+  @@map("content_areas")
 }
 
 model ContentMetrics {
@@ -345,9 +370,20 @@ model CalendarEvent {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   areaId String?
   area   Area?  @relation(fields: [areaId], references: [id])
+  areas  CalendarEventArea[]
 
   @@index([userId, date])
   @@map("calendar_events")
+}
+
+model CalendarEventArea {
+  calendarEventId String
+  areaId          String
+  calendarEvent   CalendarEvent @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
+  area            Area          @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@id([calendarEventId, areaId])
+  @@map("calendar_event_areas")
 }
 
 // ========================================

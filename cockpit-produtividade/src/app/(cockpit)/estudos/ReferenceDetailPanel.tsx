@@ -10,6 +10,8 @@ import { updateReferenceAction, archiveReferenceAction } from "@/app/actions/ref
 import type { Area, ReferenceStatus, ReferenceType, ReferencePriority } from "@/types"
 import { DatePicker } from "@/components/ui/DatePicker"
 
+type AreaRef = { id: string; name: string; color: string; icon: string }
+
 type Reference = {
   id: string
   title: string
@@ -23,7 +25,8 @@ type Reference = {
   highlights?: string[]
   plannedDate?: string | Date | null
   createdAt: string | Date
-  area?: { id: string; name: string; color: string; icon: string } | null
+  area?: AreaRef | null
+  areas?: { area: AreaRef }[]
 }
 
 const STATUS_LABEL: Record<ReferenceStatus, string> = { UNREAD: "Para ler", READING: "Lendo", READ: "Lido", ARCHIVED: "Arquivado" }
@@ -63,7 +66,9 @@ export function ReferenceDetailPanel({ reference, areas, onClose, onUpdate, onAr
   const [highlightInput, setHighlightInput] = useState("")
   const [tags, setTags] = useState<string[]>(reference.tags)
   const [tagInput, setTagInput] = useState("")
-  const [localAreaId, setLocalAreaId] = useState(reference.area?.id ?? "")
+  const [localAreaIds, setLocalAreaIds] = useState<string[]>(
+    reference.areas?.map(({ area }) => area.id) ?? (reference.area ? [reference.area.id] : [])
+  )
   const [links, setLinks] = useState<string[]>([])
   const [linkInput, setLinkInput] = useState("")
 
@@ -104,9 +109,12 @@ export function ReferenceDetailPanel({ reference, areas, onClose, onUpdate, onAr
     save({ priority })
   }
 
-  function handleAreaChange(areaId: string) {
-    setLocalAreaId(areaId)
-    save({ areaId: areaId || null })
+  function handleToggleArea(areaId: string) {
+    const next = localAreaIds.includes(areaId)
+      ? localAreaIds.filter((id) => id !== areaId)
+      : [...localAreaIds, areaId]
+    setLocalAreaIds(next)
+    save({ areaIds: next })
   }
 
   function handleAddTag(e: React.KeyboardEvent) {
@@ -233,13 +241,13 @@ export function ReferenceDetailPanel({ reference, areas, onClose, onUpdate, onAr
           {/* Area */}
           {areas.length > 0 && (
             <div>
-              <p className="text-xs text-cockpit-muted mb-2 font-medium">Área</p>
+              <p className="text-xs text-cockpit-muted mb-2 font-medium">Áreas</p>
               <div className="flex flex-wrap gap-1.5">
                 {areas.map((area) => (
-                  <button key={area.id} onClick={() => handleAreaChange(localAreaId === area.id ? "" : area.id)} className={cn(
+                  <button key={area.id} onClick={() => handleToggleArea(area.id)} className={cn(
                     "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
-                    localAreaId === area.id ? "border-transparent text-white" : "border-cockpit-border text-cockpit-muted hover:border-cockpit-text/30"
-                  )} style={localAreaId === area.id ? { backgroundColor: area.color } : undefined}>
+                    localAreaIds.includes(area.id) ? "border-transparent text-white" : "border-cockpit-border text-cockpit-muted hover:border-cockpit-text/30"
+                  )} style={localAreaIds.includes(area.id) ? { backgroundColor: area.color } : undefined}>
                     {area.icon} {area.name}
                   </button>
                 ))}
