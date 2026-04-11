@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { Plus, Archive, CheckSquare, Clock, Circle, Ban, X, Loader2, ChevronDown } from "lucide-react"
 import { cn, formatDate } from "@/lib/utils"
 import { createTaskAction, updateTaskAction, archiveTaskAction, createSubtaskAction, toggleSubtaskAction } from "@/app/actions/task.actions"
@@ -45,6 +45,7 @@ export function TasksClient({ initialTasks, areas }: Props) {
   const [filter, setFilter] = useState<TaskStatus | "ALL">("ALL")
   const [showForm, setShowForm] = useState(false)
   const [selectedTask, setSelectedTask] = useState<TaskWithAreas | null>(null)
+  const [statusDropdown, setStatusDropdown] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   // Form state
@@ -55,6 +56,14 @@ export function TasksClient({ initialTasks, areas }: Props) {
   const [selectedAreaIds, setSelectedAreaIds] = useState<string[]>([])
   const [estimatedMin, setEstimatedMin] = useState("")
   const [subtaskInput, setSubtaskInput] = useState("")
+
+  // Fecha dropdown de status ao clicar fora
+  useEffect(() => {
+    if (!statusDropdown) return
+    function onClick() { setStatusDropdown(null) }
+    document.addEventListener("click", onClick)
+    return () => document.removeEventListener("click", onClick)
+  }, [statusDropdown])
 
   const filtered = filter === "ALL"
     ? tasks.filter((t) => t.status !== "CANCELLED")
@@ -281,27 +290,29 @@ export function TasksClient({ initialTasks, areas }: Props) {
               <div key={task.id} className={cn("cockpit-card !p-0 group/card hover:border-accent/30 transition-colors", task.status === "CANCELLED" && "opacity-60")}>
                 <div className="flex items-start gap-4 px-5 py-4">
                   {/* Status dropdown */}
-                  <div className="relative group mt-0.5 flex-shrink-0">
+                  <div className="relative mt-0.5 flex-shrink-0">
                     <button
                       className="flex items-center gap-1 p-1 rounded-lg hover:bg-cockpit-surface-hover transition-colors"
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); setStatusDropdown(statusDropdown === task.id ? null : task.id) }}
                     >
                       {STATUS_ICON[task.status]}
                     </button>
-                    <div className="absolute left-0 top-9 z-50 hidden group-hover:flex flex-col bg-cockpit-surface border border-cockpit-border rounded-xl shadow-2xl overflow-hidden min-w-[160px]">
-                      {(["TODO", "IN_PROGRESS", "DONE", "CANCELLED"] as TaskStatus[]).map((s) => (
-                        <button
-                          key={s}
-                          onClick={(e) => { e.stopPropagation(); handleStatusChange(task, s) }}
-                          className={cn(
-                            "flex items-center gap-2 px-3 py-2 text-xs hover:bg-cockpit-surface-hover transition-colors text-left",
-                            task.status === s ? "text-accent-dark font-medium" : "text-cockpit-muted"
-                          )}
-                        >
-                          {STATUS_ICON[s]} {STATUS_LABEL[s]}
-                        </button>
-                      ))}
-                    </div>
+                    {statusDropdown === task.id && (
+                      <div className="absolute left-0 top-9 z-50 flex flex-col bg-cockpit-surface border border-cockpit-border rounded-xl shadow-2xl overflow-hidden min-w-[160px]">
+                        {(["TODO", "IN_PROGRESS", "DONE", "CANCELLED"] as TaskStatus[]).map((s) => (
+                          <button
+                            key={s}
+                            onClick={(e) => { e.stopPropagation(); handleStatusChange(task, s); setStatusDropdown(null) }}
+                            className={cn(
+                              "flex items-center gap-2 px-3 py-2.5 text-xs hover:bg-cockpit-surface-hover transition-colors text-left",
+                              task.status === s ? "text-accent-dark font-medium" : "text-cockpit-muted"
+                            )}
+                          >
+                            {STATUS_ICON[s]} {STATUS_LABEL[s]}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Clickable content → opens panel */}
