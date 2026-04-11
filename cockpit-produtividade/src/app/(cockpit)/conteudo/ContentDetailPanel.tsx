@@ -213,56 +213,20 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
 
-          {/* Phase info + checklist */}
-          {currentPhaseConfig && (
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider flex items-center gap-1.5">
-                    <CheckSquare size={13} className="text-accent" /> Checklist — {currentPhaseConfig.label}
-                  </h3>
-                  {totalChecklist > 0 && (
-                    <span className="text-[10px] text-cockpit-muted">{checkedCount}/{totalChecklist}</span>
-                  )}
-                </div>
-                {totalChecklist > 0 && (
-                  <div className="w-full h-1.5 bg-cockpit-border-light rounded-full overflow-hidden mb-3">
-                    <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${totalChecklist > 0 ? (checkedCount / totalChecklist) * 100 : 0}%` }} />
+          {/* Phase tips */}
+          {currentPhaseConfig && currentPhaseConfig.tips.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                <Lightbulb size={13} className="text-amber-500" /> Dicas — {currentPhaseConfig.label}
+              </h3>
+              <div className="space-y-1.5">
+                {currentPhaseConfig.tips.map((tip, i) => (
+                  <div key={i} className="flex items-start gap-2 px-3 py-2 bg-amber-500/5 border border-amber-500/10 rounded-xl">
+                    <span className="text-amber-500 mt-0.5 flex-shrink-0 text-xs">💡</span>
+                    <p className="text-xs text-cockpit-text">{tip}</p>
                   </div>
-                )}
-                <div className="space-y-1">
-                  {checklistItems.map((item) => {
-                    const key = `${content.phase}_${item.label}`
-                    return (
-                      <label key={key} className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-cockpit-surface-hover transition-colors cursor-pointer group">
-                        <input type="checkbox" checked={!!checklist[key]} onChange={() => handleChecklistToggle(key)}
-                          className="w-4 h-4 accent-accent rounded mt-0.5 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <span className={cn("text-sm", checklist[key] ? "line-through text-cockpit-muted" : "text-cockpit-text")}>{item.label}</span>
-                          {item.tip && <p className="text-[10px] text-cockpit-muted mt-0.5">{item.tip}</p>}
-                        </div>
-                      </label>
-                    )
-                  })}
-                </div>
+                ))}
               </div>
-
-              {/* Tips */}
-              {currentPhaseConfig.tips.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                    <Lightbulb size={13} className="text-amber-500" /> Dicas
-                  </h3>
-                  <div className="space-y-1.5">
-                    {currentPhaseConfig.tips.map((tip, i) => (
-                      <div key={i} className="flex items-start gap-2 px-3 py-2 bg-amber-500/5 border border-amber-500/10 rounded-xl">
-                        <span className="text-amber-500 mt-0.5 flex-shrink-0 text-xs">💡</span>
-                        <p className="text-xs text-cockpit-text">{tip}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
