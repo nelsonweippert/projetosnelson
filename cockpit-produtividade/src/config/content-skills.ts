@@ -191,7 +191,8 @@ const SHORT_VIDEO: ContentSkill = {
     "Consistência > qualidade perfeita. Poste regularmente para alimentar o algoritmo",
     "Recicle conteúdo entre plataformas adaptando formato (não repost genérico)",
     "Estude seus top 10 vídeos — padrões de sucesso se repetem",
-    "Trending audios dão boost de 30-60% no alcance nos primeiros dias",
+    "Trending audios dão boost de 30-60% no alcance — use nas primeiras 24-72h do trend",
+    "Shares via DM valem 2-5x mais que likes no algoritmo — crie conteúdo 'compartilhável'",
     "Grave em lote (batch) — 5-10 vídeos em uma sessão é mais eficiente",
     "Responder comentários com vídeo gera 2-3x mais engajamento",
   ],
@@ -536,7 +537,8 @@ const INSTAGRAM: ContentSkill = {
         { label: "CTA planejado (salvar, compartilhar, comentar, link)" },
       ],
       tips: [
-        "Ranking de alcance em 2025: Reels > Carrosséis > Stories > Posts estáticos",
+        "Ranking de alcance em 2025: Carrosséis ≥ Reels > Stories > Posts estáticos (carrosséis ultrapassaram Reels para contas < 100K)",
+        "Instagram re-serve carrosséis a partir do slide onde o usuário parou — mais slides = mais impressões",
         "Carrosséis educacionais são o formato mais consistente em engajamento",
         "Misture pilares: 40% valor/educação, 30% entretenimento, 20% inspiração, 10% venda",
         "O Instagram prioriza Saves e Shares sobre Likes — crie conteúdo 'salvável'",
@@ -555,7 +557,7 @@ const INSTAGRAM: ContentSkill = {
         { label: "Hashtags pesquisadas (5-15, relevantes ao nicho)", tip: "Mix: 5 grandes + 5 médias + 5 nicho" },
       ],
       tips: [
-        "CARROSSEL: 7-10 slides ideal. Slide 1 = hook visual. Slide 2 = contexto/problema. Slides 3-8 = conteúdo. Slide 9 = recap. Slide 10 = CTA",
+        "CARROSSEL: 8-10 slides ideal (posts com 8-10 slides têm o maior engajamento). Slide 1 = hook visual. Slide 2 = contexto/problema. Slides 3-8 = conteúdo. Slide 9 = recap. Slide 10 = CTA",
         "HOOKS DE CAPTION: 'Pare de fazer X se quer Y', 'O que ninguém te conta sobre X', 'Salva esse post se você...'",
         "Use line breaks na caption — blocos de texto denso = skip",
         "CTA patterns: 'Salva pra depois', 'Marca quem precisa ver', 'Manda nos stories', 'Link na bio'",
@@ -644,7 +646,8 @@ const INSTAGRAM: ContentSkill = {
   ],
   bestPractices: [
     "Carrosséis educacionais são o rei do engajamento — priorizem",
-    "Saves e Shares valem 5-10x mais que Likes para o algoritmo",
+    "Saves e Shares (especialmente via DM) valem 5-10x mais que Likes para o algoritmo",
+    "Instagram re-distribui carrosséis para quem não finalizou — mais slides swipados = mais alcance orgânico",
     "Consistência visual (brand templates) = reconhecimento instantâneo no feed",
     "Stories diários mantêm você no topo do feed (story ring)",
     "Responda comments com perguntas — gera mais replies = mais engajamento",
