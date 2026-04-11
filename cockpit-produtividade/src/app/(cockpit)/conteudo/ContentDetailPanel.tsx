@@ -50,12 +50,14 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   // AI
   const [aiLoading, setAiLoading] = useState<string | null>(null)
   const [aiResult, setAiResult] = useState<string | null>(null)
+  const [aiOptions, setAiOptions] = useState<any[] | null>(null)
+  const [aiField, setAiField] = useState<string | null>(null)
   const [aiAction, setAiAction] = useState<string | null>(null)
 
   const hasChanges = titleChanged || hookChanged || scriptChanged || researchChanged || thumbChanged || notesChanged
 
   const callAI = useCallback(async (action: string) => {
-    setAiLoading(action); setAiResult(null); setAiAction(action)
+    setAiLoading(action); setAiResult(null); setAiOptions(null); setAiAction(action); setAiField(null)
     try {
       const res = await fetch("/api/content/ai", {
         method: "POST",
@@ -68,13 +70,29 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
       })
       if (res.ok) {
         const data = await res.json()
-        setAiResult(data.result)
+        if (data.type === "options" && data.options) {
+          setAiOptions(data.options)
+          setAiField(data.field)
+        } else {
+          setAiResult(data.result)
+        }
       } else {
         setAiResult("Erro ao gerar sugestão. Verifique a ANTHROPIC_API_KEY.")
       }
     } catch { setAiResult("Erro de conexão.") }
     setAiLoading(null)
   }, [content.skill, content.phase, content.title, hook, script, notes, research, content.series])
+
+  function selectOption(option: any) {
+    if (aiField === "hook") {
+      setHook(option.text); setHookChanged(true)
+      save({ hook: option.text })
+    } else if (aiField === "title") {
+      setTitle(option.text); setTitleChanged(true)
+      save({ title: option.text })
+    }
+    setAiOptions(null); setAiField(null)
+  }
 
   function save(data: Record<string, unknown>) {
     startTransition(async () => {
@@ -339,19 +357,40 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
             </div>
           )}
 
-          {/* AI Result Panel */}
+          {/* AI Options (selectable cards) */}
+          {aiOptions && aiOptions.length > 0 && (
+            <div className="rounded-xl border border-accent/30 bg-accent/5 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-accent/20">
+                <p className="text-[11px] font-semibold text-accent flex items-center gap-1">
+                  <Sparkles size={12} />
+                  {aiField === "hook" ? "Escolha um hook" : aiField === "title" ? "Escolha um título" : "Opções geradas"}
+                </p>
+                <button onClick={() => { setAiOptions(null); setAiField(null) }} className="text-cockpit-muted hover:text-cockpit-text"><X size={13} /></button>
+              </div>
+              <div className="p-2 space-y-1.5 max-h-72 overflow-y-auto">
+                {aiOptions.map((opt: any, i: number) => (
+                  <button key={i} onClick={() => selectOption(opt)}
+                    className="w-full text-left p-3 rounded-xl border border-cockpit-border bg-cockpit-bg hover:border-accent/40 hover:bg-accent/5 transition-all group">
+                    <p className="text-sm text-cockpit-text group-hover:text-accent font-medium">{opt.text}</p>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      {opt.style && <span className="text-[10px] px-2 py-0.5 rounded-full bg-cockpit-border-light text-cockpit-muted">{opt.style}</span>}
+                      {opt.why && <span className="text-[10px] text-cockpit-muted">{opt.why}</span>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* AI Text Result (for script, research, thumbnail, review) */}
           {aiResult && (
             <div className="rounded-xl border border-accent/30 bg-accent/5 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2 border-b border-accent/20">
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-accent/20">
                 <p className="text-[11px] font-semibold text-accent flex items-center gap-1"><Sparkles size={12} /> Sugestão da IA</p>
                 <button onClick={() => { setAiResult(null); setAiAction(null) }} className="text-cockpit-muted hover:text-cockpit-text"><X size={13} /></button>
               </div>
               <div className="px-4 py-3 text-sm text-cockpit-text whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">{aiResult}</div>
               <div className="flex items-center gap-2 px-4 py-2 border-t border-accent/20">
-                {aiAction === "generate_hook" && (
-                  <button onClick={() => { setHook(aiResult); setHookChanged(true); setAiResult(null) }}
-                    className="text-[11px] text-accent font-medium hover:underline">Usar como hook</button>
-                )}
                 {aiAction === "generate_script" && (
                   <button onClick={() => { setScript(aiResult); setScriptChanged(true); setAiResult(null) }}
                     className="text-[11px] text-accent font-medium hover:underline">Usar como roteiro</button>

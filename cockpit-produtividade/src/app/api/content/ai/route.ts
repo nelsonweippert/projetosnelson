@@ -5,8 +5,11 @@ import { CONTENT_SKILLS, type SkillId } from "@/config/content-skills"
 
 const SYSTEM_PROMPT = `Você é um especialista em criação de conteúdo digital para redes sociais e YouTube.
 Você domina hooks virais, storytelling, copywriting, SEO para vídeo, e estratégias de engajamento.
-Responda sempre em português brasileiro, de forma direta e prática.
-Use markdown leve para formatação (negrito, listas, etc).`
+Responda sempre em português brasileiro, de forma direta e prática.`
+
+const SYSTEM_PROMPT_JSON = `Você é um especialista em criação de conteúdo digital para redes sociais e YouTube.
+Você domina hooks virais, storytelling, copywriting, SEO para vídeo, e estratégias de engajamento.
+Responda sempre em português brasileiro. Retorne APENAS JSON válido, sem markdown, sem code blocks, sem texto extra.`
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -32,8 +35,8 @@ export async function POST(req: NextRequest) {
   let prompt = ""
 
   switch (action) {
-    case "generate_hook":
-      prompt = `${aiContext}
+    case "generate_hook": {
+      const hookPrompt = `${aiContext}
 
 Contexto do conteúdo:
 - Tipo: ${skillConfig?.label ?? "Geral"}
@@ -41,10 +44,55 @@ Contexto do conteúdo:
 ${notes ? `- Notas: ${notes}` : ""}
 ${series ? `- Série: ${series}` : ""}
 
-Gere 5 opções de HOOK (gancho para os primeiros segundos) para este conteúdo.
-Cada hook deve ser diferente em abordagem (pergunta, afirmação chocante, estatística, POV, direto).
-Numere cada opção.`
-      break
+Gere 5 opções de HOOK. Retorne APENAS um JSON array:
+[{"text": "texto do hook", "style": "estilo usado (pergunta/chocante/estatística/POV/direto)", "why": "por que funciona"}]`
+      try {
+        const result = await generateContentSuggestion(SYSTEM_PROMPT_JSON, hookPrompt)
+        const options = JSON.parse(result.replace(/```json?\n?/g, "").replace(/```/g, "").trim())
+        return NextResponse.json({ type: "options", field: "hook", options })
+      } catch {
+        return NextResponse.json({ type: "options", field: "hook", options: [] })
+      }
+    }
+
+    case "generate_titles": {
+      const titlesPrompt = `${aiContext}
+
+Contexto:
+- Tipo: ${skillConfig?.label ?? "Geral"}
+- Tema/Título atual: ${title ?? "Não definido"}
+${hook ? `- Hook: ${hook}` : ""}
+
+Gere 6 variações de TÍTULO otimizados para clique. Retorne APENAS um JSON array:
+[{"text": "título aqui", "style": "técnica usada (curiosity gap/números/urgência/como fazer/contraste)", "why": "por que gera clique"}]
+Cada título < 60 caracteres.`
+      try {
+        const result = await generateContentSuggestion(SYSTEM_PROMPT_JSON, titlesPrompt)
+        const options = JSON.parse(result.replace(/```json?\n?/g, "").replace(/```/g, "").trim())
+        return NextResponse.json({ type: "options", field: "title", options })
+      } catch {
+        return NextResponse.json({ type: "options", field: "title", options: [] })
+      }
+    }
+
+    case "generate_series": {
+      const seriesPrompt = `${aiContext}
+
+Tema/nicho: ${title ?? "Não definido"}
+Tipo de conteúdo: ${skillConfig?.label ?? "Geral"}
+${series ? `Série existente: ${series}` : ""}
+
+Gere uma SÉRIE de 6 peças de conteúdo. Retorne APENAS um JSON array:
+[{"title": "título da peça", "hook": "hook sugerido (1-2 frases)", "angle": "ângulo único desta peça"}]
+A série deve ter progressão lógica.`
+      try {
+        const result = await generateContentSuggestion(SYSTEM_PROMPT_JSON, seriesPrompt)
+        const options = JSON.parse(result.replace(/```json?\n?/g, "").replace(/```/g, "").trim())
+        return NextResponse.json({ type: "series", options })
+      } catch {
+        return NextResponse.json({ type: "series", options: [] })
+      }
+    }
 
     case "generate_script":
       prompt = `${aiContext}
@@ -75,20 +123,6 @@ Sugira um plano de pesquisa completo:
 3. Dados/estatísticas interessantes para incluir
 4. Referências e fontes sugeridas para pesquisar
 5. Ângulos únicos que poucos criadores exploram`
-      break
-
-    case "generate_titles":
-      prompt = `${aiContext}
-
-Contexto do conteúdo:
-- Tipo: ${skillConfig?.label ?? "Geral"}
-- Tema/Título atual: ${title ?? "Não definido"}
-${hook ? `- Hook: ${hook}` : ""}
-
-Gere 8 variações de TÍTULO otimizados para clique (CTR).
-Use técnicas: curiosity gap, números, superlativos, urgência, "como fazer", contraste.
-Cada título deve ter menos de 60 caracteres.
-Numere cada opção e indique a técnica usada entre parênteses.`
       break
 
     case "generate_thumbnail":
@@ -129,23 +163,6 @@ Analise:
 4. Pontos fortes do conteúdo
 5. Pontos a melhorar (seja específico)
 6. Nota geral de 1-10 com justificativa`
-      break
-
-    case "generate_series":
-      prompt = `${aiContext}
-
-Tema/nicho: ${title ?? "Não definido"}
-Tipo de conteúdo: ${skillConfig?.label ?? "Geral"}
-${series ? `Série existente: ${series}` : ""}
-
-Gere uma SÉRIE de 6-8 peças de conteúdo sobre este tema.
-Para cada peça inclua:
-1. **Título** (otimizado para clique)
-2. **Hook** (1-2 frases)
-3. **Ângulo** (o que torna esta peça única na série)
-
-A série deve ter progressão lógica (do básico ao avançado, ou cronológica, ou por subtema).
-Formate cada peça numerada claramente.`
       break
 
     default:

@@ -65,7 +65,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   const [newPlatform, setNewPlatform] = useState<Platform>("YOUTUBE")
   const [newFormat, setNewFormat] = useState<ContentFormat>("LONG_VIDEO")
   const [seriesAiLoading, setSeriesAiLoading] = useState(false)
-  const [seriesAiResult, setSeriesAiResult] = useState<string | null>(null)
+  const [seriesOptions, setSeriesOptions] = useState<any[] | null>(null)
 
   // Filters
   const [search, setSearch] = useState("")
@@ -198,16 +198,29 @@ export function ConteudoClient({ initialContents, areas }: Props) {
 
   async function handleGenerateSeries() {
     if (!newTitle.trim() || !selectedSkill) return
-    setSeriesAiLoading(true); setSeriesAiResult(null)
+    setSeriesAiLoading(true); setSeriesOptions(null)
     try {
       const res = await fetch("/api/content/ai", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "generate_series", skill: selectedSkill, title: newTitle, series: newSeries }),
       })
-      if (res.ok) { const data = await res.json(); setSeriesAiResult(data.result) }
-      else setSeriesAiResult("Erro ao gerar série. Verifique a ANTHROPIC_API_KEY.")
-    } catch { setSeriesAiResult("Erro de conexão.") }
+      if (res.ok) { const data = await res.json(); setSeriesOptions(data.options ?? []) }
+    } catch {}
     setSeriesAiLoading(false)
+  }
+
+  async function createFromSeriesOption(opt: { title: string; hook: string }) {
+    if (!selectedSkill) return
+    startTransition(async () => {
+      const result = await createContentAction({
+        title: opt.title, hook: opt.hook, platform: newPlatform, format: newFormat,
+        skill: selectedSkill, series: newSeries || newTitle, areaIds: newAreaIds,
+      })
+      if (result.success) {
+        setContents((prev) => [result.data as Content, ...prev])
+        setSeriesOptions((prev) => prev?.filter((o) => o.title !== opt.title) ?? null)
+      }
+    })
   }
 
   // ── Render card ─────────────────────────────────────────────────────────
@@ -380,13 +393,23 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                       className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent/10 text-accent text-xs font-semibold border border-accent/20 rounded-xl hover:bg-accent/20 transition-colors disabled:opacity-50">
                       {seriesAiLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Gerar ideias de série com IA
                     </button>
-                    {seriesAiResult && (
+                    {seriesOptions && seriesOptions.length > 0 && (
                       <div className="rounded-xl border border-accent/30 bg-accent/5 overflow-hidden">
-                        <div className="flex items-center justify-between px-4 py-2 border-b border-accent/20">
-                          <p className="text-[11px] font-semibold text-accent flex items-center gap-1"><Sparkles size={12} /> Série gerada pela IA</p>
-                          <button onClick={() => setSeriesAiResult(null)} className="text-cockpit-muted hover:text-cockpit-text"><X size={13} /></button>
+                        <div className="flex items-center justify-between px-4 py-2.5 border-b border-accent/20">
+                          <p className="text-[11px] font-semibold text-accent flex items-center gap-1"><Sparkles size={12} /> Série gerada — clique para criar</p>
+                          <button onClick={() => setSeriesOptions(null)} className="text-cockpit-muted hover:text-cockpit-text"><X size={13} /></button>
                         </div>
-                        <div className="px-4 py-3 text-sm text-cockpit-text whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{seriesAiResult}</div>
+                        <div className="p-2 space-y-1.5 max-h-64 overflow-y-auto">
+                          {seriesOptions.map((opt: any, i: number) => (
+                            <button key={i} onClick={() => createFromSeriesOption(opt)} disabled={isPending}
+                              className="w-full text-left p-3 rounded-xl border border-cockpit-border bg-cockpit-bg hover:border-accent/40 hover:bg-accent/5 transition-all group disabled:opacity-50">
+                              <p className="text-sm text-cockpit-text group-hover:text-accent font-medium">{opt.title}</p>
+                              {opt.hook && <p className="text-xs text-cockpit-muted mt-1 italic">"{opt.hook}"</p>}
+                              {opt.angle && <p className="text-[10px] text-cockpit-muted mt-1">{opt.angle}</p>}
+                              <p className="text-[9px] text-accent mt-1.5 opacity-0 group-hover:opacity-100">Clique para criar este conteúdo</p>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
