@@ -396,7 +396,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
           </div>
 
           {/* Phase stepper */}
-          <div className="flex items-center gap-1.5 overflow-x-auto">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
             {PHASE_ORDER.filter((ph) => !skill || skillPhases.some((sp) => sp.id === ph) || ["TITLE", "DESCRIPTION"].includes(ph)).map((ph) => {
               const isActive = ph === content.phase
               const isPast = PHASE_ORDER.indexOf(ph) < currentIdx
