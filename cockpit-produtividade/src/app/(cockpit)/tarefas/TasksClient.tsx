@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
-import { Plus, Archive, CheckSquare, Clock, Circle, Ban, X, Loader2, ChevronDown } from "lucide-react"
+import { Plus, Archive, CheckSquare, Clock, Circle, Ban, X, Loader2, ChevronDown, AlertTriangle } from "lucide-react"
 import { cn, formatDate } from "@/lib/utils"
 import { createTaskAction, updateTaskAction, archiveTaskAction, createSubtaskAction, toggleSubtaskAction } from "@/app/actions/task.actions"
 import type { Area, TaskStatus, TaskPriority } from "@/types"
@@ -33,6 +33,21 @@ const PRIORITY_LABEL: Record<TaskPriority, string> = {
   LOW: "Baixa",
   MEDIUM: "Média",
   HIGH: "Alta",
+}
+
+type DueStatus = "overdue" | "today" | "soon" | "ok" | null
+
+function getDueStatus(dueDate: Date | string | null | undefined, status: TaskStatus): DueStatus {
+  if (!dueDate || status === "DONE" || status === "CANCELLED") return null
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+  const due = new Date(dueDate)
+  due.setHours(0, 0, 0, 0)
+  const diffDays = Math.floor((due.getTime() - now.getTime()) / 86400000)
+  if (diffDays < 0) return "overdue"
+  if (diffDays === 0) return "today"
+  if (diffDays <= 2) return "soon"
+  return "ok"
 }
 
 interface Props {
@@ -286,8 +301,17 @@ export function TasksClient({ initialTasks, areas }: Props) {
               <p className="text-sm mt-3">Nenhuma tarefa encontrada</p>
             </div>
           ) : (
-            filtered.map((task) => (
-              <div key={task.id} className={cn("cockpit-card !p-0 group/card hover:border-accent/30 transition-colors", task.status === "CANCELLED" && "opacity-60")}>
+            filtered.map((task) => {
+              const dueStatus = getDueStatus(task.dueDate, task.status)
+              return (
+              <div key={task.id} className={cn(
+                "cockpit-card !p-0 group/card transition-colors",
+                task.status === "CANCELLED" && "opacity-60",
+                dueStatus === "overdue" && "!border-red-500/40 bg-red-500/[0.03]",
+                dueStatus === "today" && "!border-amber-500/40",
+                dueStatus === "soon" && "!border-amber-400/20",
+                !dueStatus && "hover:border-accent/30",
+              )}>
                 <div className="flex items-start gap-4 px-5 py-4">
                   {/* Status dropdown */}
                   <div className="relative mt-0.5 flex-shrink-0">
@@ -331,8 +355,15 @@ export function TasksClient({ initialTasks, areas }: Props) {
                         {PRIORITY_LABEL[task.priority]}
                       </span>
                       {task.dueDate && (
-                        <span className="text-xs text-cockpit-muted bg-cockpit-border-light px-2.5 py-1 rounded-full">
-                          {formatDate(task.dueDate)}
+                        <span className={cn(
+                          "text-xs px-2.5 py-1 rounded-full flex items-center gap-1",
+                          dueStatus === "overdue" && "bg-red-500/15 text-red-400 font-medium",
+                          dueStatus === "today" && "bg-amber-500/15 text-amber-400 font-medium",
+                          dueStatus === "soon" && "bg-amber-500/10 text-amber-500/80",
+                          (!dueStatus || dueStatus === "ok") && "bg-cockpit-border-light text-cockpit-muted",
+                        )}>
+                          {dueStatus === "overdue" && <AlertTriangle size={11} />}
+                          {dueStatus === "overdue" ? "Atrasada" : dueStatus === "today" ? "Vence hoje" : formatDate(task.dueDate)}
                         </span>
                       )}
                       {task.estimatedMin && (
@@ -368,7 +399,8 @@ export function TasksClient({ initialTasks, areas }: Props) {
                   </div>
                 </div>
               </div>
-            ))
+              )
+            })
           )}
         </div>
       </div>
