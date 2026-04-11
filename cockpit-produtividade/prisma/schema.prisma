@@ -278,31 +278,44 @@ enum ContentFormat {
 
 enum ContentPhase {
   IDEA
+  RESEARCH
   SCRIPT
   RECORDING
   EDITING
+  THUMBNAIL
   REVIEW
   SCHEDULED
   PUBLISHED
   ARCHIVED
 }
 
+enum ContentSkill {
+  SHORT_VIDEO
+  LONG_VIDEO
+  INSTAGRAM
+}
+
 model Content {
-  id           String        @id @default(cuid())
-  title        String
-  platform     Platform      @default(YOUTUBE)
-  format       ContentFormat @default(LONG_VIDEO)
-  phase        ContentPhase  @default(IDEA)
-  hook         String?
-  script       String?
-  series       String?
-  plannedDate  DateTime?
-  publishedAt  DateTime?
-  publishedUrl String?
-  notes        String?
-  isArchived   Boolean       @default(false)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id             String        @id @default(cuid())
+  title          String
+  platform       Platform      @default(YOUTUBE)
+  format         ContentFormat @default(LONG_VIDEO)
+  phase          ContentPhase  @default(IDEA)
+  skill          ContentSkill?
+  hook           String?
+  script         String?
+  series         String?
+  tags           String[]
+  thumbnailNotes String?
+  research       String?
+  checklist      Json?
+  plannedDate    DateTime?
+  publishedAt    DateTime?
+  publishedUrl   String?
+  notes          String?
+  isArchived     Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   userId  String
   user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)

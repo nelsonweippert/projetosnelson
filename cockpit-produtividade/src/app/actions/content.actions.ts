@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
-import { createContentSchema } from "@/validations/content.validation"
 import { createContent, updateContent, archiveContent } from "@/services/content.service"
 import type { ActionResult } from "@/types"
 
@@ -12,15 +11,22 @@ async function getUserId() {
   return session.user.id
 }
 
-export async function createContentAction(data: unknown): Promise<ActionResult> {
+export async function createContentAction(data: Record<string, unknown>): Promise<ActionResult> {
   try {
     const userId = await getUserId()
-    const parsed = createContentSchema.safeParse(data)
-    if (!parsed.success) return { success: false, error: "Dados inválidos" }
-    const content = await createContent(userId, parsed.data)
+    const content = await createContent(userId, data as any)
     revalidatePath("/conteudo")
     return { success: true, data: content }
   } catch { return { success: false, error: "Erro ao criar conteúdo" } }
+}
+
+export async function updateContentAction(id: string, data: Record<string, unknown>): Promise<ActionResult> {
+  try {
+    const userId = await getUserId()
+    const content = await updateContent(id, userId, data as any)
+    revalidatePath("/conteudo")
+    return { success: true, data: content }
+  } catch { return { success: false, error: "Erro ao atualizar conteúdo" } }
 }
 
 export async function advanceContentPhaseAction(id: string, phase: string): Promise<ActionResult> {
