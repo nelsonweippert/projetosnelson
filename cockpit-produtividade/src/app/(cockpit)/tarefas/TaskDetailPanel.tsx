@@ -63,9 +63,22 @@ export function TaskDetailPanel({ task, areas, onClose, onUpdate, onArchive }: P
   const [description, setDescription] = useState(task.description ?? "")
   const [notesChanged, setNotesChanged] = useState(false)
   const [descChanged, setDescChanged] = useState(false)
+  const [title, setTitle] = useState(task.title)
+  const [titleChanged, setTitleChanged] = useState(false)
   const [subtaskInput, setSubtaskInput] = useState("")
   const [localSubtasks, setLocalSubtasks] = useState(task.subtasks)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function handleSaveTitle() {
+    if (!title.trim() || title === task.title) { setTitleChanged(false); return }
+    startTransition(async () => {
+      const result = await updateTaskAction(task.id, { title })
+      if (result.success) {
+        onUpdate({ ...task, title, subtasks: localSubtasks })
+        setTitleChanged(false)
+      }
+    })
+  }
 
   function handleStatusChange(status: TaskStatus) {
     startTransition(async () => {
@@ -146,7 +159,26 @@ export function TaskDetailPanel({ task, areas, onClose, onUpdate, onArchive }: P
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-5 border-b border-cockpit-border">
           <div className="flex-1 min-w-0 pr-4">
-            <h2 className="text-base font-semibold text-cockpit-text leading-snug">{task.title}</h2>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => { setTitle(e.target.value); setTitleChanged(true) }}
+                onBlur={handleSaveTitle}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSaveTitle() }}
+                className="w-full text-base font-semibold text-cockpit-text leading-snug bg-transparent border-b border-transparent hover:border-cockpit-border focus:border-accent focus:outline-none transition-colors py-0.5"
+              />
+              {titleChanged && (
+                <button
+                  onClick={handleSaveTitle}
+                  disabled={isPending}
+                  className="flex-shrink-0 text-accent-dark hover:text-accent transition-colors"
+                  title="Salvar título"
+                >
+                  <Save size={14} />
+                </button>
+              )}
+            </div>
             <p className="text-xs text-cockpit-muted mt-1">
               Criada em {formatDate(task.createdAt)}
             </p>
@@ -363,9 +395,9 @@ export function TaskDetailPanel({ task, areas, onClose, onUpdate, onArchive }: P
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-cockpit-border bg-cockpit-bg/50">
-          {(notesChanged || descChanged) && (
+          {(titleChanged || notesChanged || descChanged) && (
             <button
-              onClick={() => { if (notesChanged) handleSaveNotes(); if (descChanged) handleSaveDescription() }}
+              onClick={() => { if (titleChanged) handleSaveTitle(); if (notesChanged) handleSaveNotes(); if (descChanged) handleSaveDescription() }}
               disabled={isPending}
               className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent text-black text-sm font-semibold rounded-xl hover:bg-accent-hover transition-colors disabled:opacity-50"
             >
@@ -373,7 +405,7 @@ export function TaskDetailPanel({ task, areas, onClose, onUpdate, onArchive }: P
               Salvar alterações
             </button>
           )}
-          {!notesChanged && !descChanged && (
+          {!titleChanged && !notesChanged && !descChanged && (
             <p className="text-center text-xs text-cockpit-muted">Todas as alterações salvas</p>
           )}
         </div>
