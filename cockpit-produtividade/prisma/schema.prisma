@@ -27,6 +27,7 @@ model User {
   contents       Content[]
   aiInsights     AiInsight[]
   calendarEvents CalendarEvent[]
+  skillSources   SkillSource[]
 
   @@map("users")
 }
@@ -397,6 +398,26 @@ model CalendarEventArea {
 
   @@id([calendarEventId, areaId])
   @@map("calendar_event_areas")
+}
+
+// ========================================
+// Skills — Fontes e contribuições do usuário
+// ========================================
+
+model SkillSource {
+  id        String   @id @default(cuid())
+  skillId   String   // SHORT_VIDEO, LONG_VIDEO, INSTAGRAM
+  title     String
+  url       String?
+  content   String?  // insight, nota, ou resumo
+  type      String   @default("source") // source, insight, link, note
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, skillId])
+  @@map("skill_sources")
 }
 
 // ========================================

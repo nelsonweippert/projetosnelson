@@ -24,6 +24,12 @@ export interface PhaseConfig {
   aiPromptContext: string // context injected into AI prompts for this phase
 }
 
+export interface SkillSourceRef {
+  title: string
+  url: string
+  description: string
+}
+
 export interface ContentSkill {
   id: SkillId
   label: string
@@ -35,6 +41,8 @@ export interface ContentSkill {
   commonMistakes: string[]
   kpis: { label: string; target: string; why: string }[]
   scriptTemplates: { name: string; structure: string[] }[]
+  sources: SkillSourceRef[]
+  lastUpdated: string
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -257,6 +265,14 @@ const SHORT_VIDEO: ContentSkill = {
       ],
     },
   ],
+  sources: [
+    { title: "Short-Form Video Statistics 2026", url: "https://autofaceless.ai/blog/short-form-video-statistics-2026", description: "Dados de performance: engagement rates por plataforma, views por duração, taxa de conclusão" },
+    { title: "Short-Form Video Trends 2026 — ShortSync", url: "https://www.shortsync.app/resources/short-form-video-trends-2026", description: "Tendências emergentes: curiosity stacking, cross-platform, AI content" },
+    { title: "50+ Viral Hook Templates 2026", url: "https://www.marketingblocks.ai/50-viral-hook-templates-for-ads-reels-tiktok-or-captions-2026-frameworks-examples-ai-prompts-included/", description: "Templates de hooks virais com frameworks e prompts de IA" },
+    { title: "YouTube Shorts Best Practices 2026 — JoinBrands", url: "https://joinbrands.com/blog/youtube-shorts-best-practices/", description: "10 dicas comprovadas para maximizar views em Shorts" },
+    { title: "Short-Form Video Mastery Guide — ALM Corp", url: "https://almcorp.com/blog/short-form-video-mastery-tiktok-reels-youtube-shorts-2026/", description: "Guia completo para dominar TikTok, Reels e Shorts em 2026" },
+  ],
+  lastUpdated: "2026-04-11",
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -519,6 +535,14 @@ const LONG_VIDEO: ContentSkill = {
       ],
     },
   ],
+  sources: [
+    { title: "YouTube Algorithm 2026 — vidIQ", url: "https://vidiq.com/blog/post/understanding-youtube-algorithm/", description: "Como o algoritmo do YouTube funciona em 2026: satisfação, retention, CTR relativo" },
+    { title: "YouTube Algorithm Updates 2026 — OutlierKit", url: "https://outlierkit.com/resources/youtube-algorithm-updates/", description: "Todas as mudanças do algoritmo: browse feed, micro-nicho, Shorts desacoplado" },
+    { title: "YouTube December 2025 Algorithm Update — Dataslayer", url: "https://www.dataslayer.ai/blog/youtubes-december-2025-algorithm-update-browse-feed-cut-long-videos-by-80", description: "Mudança do browse feed: redução de 80% em recomendações de long-form" },
+    { title: "YouTube Algorithm — SocialBee", url: "https://socialbee.com/blog/youtube-algorithm/", description: "Guia completo do algoritmo YouTube para 2026" },
+    { title: "Balance Shorts and Long-Form 2026", url: "https://marketingagent.blog/2026/02/15/how-to-balance-youtube-shorts-and-long-form-content-for-maximum-roi-in-2026-optimizing-both-formats/", description: "Como balancear Shorts e long-form para ROI máximo" },
+  ],
+  lastUpdated: "2026-04-11",
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -733,6 +757,15 @@ const INSTAGRAM: ContentSkill = {
       ],
     },
   ],
+  sources: [
+    { title: "Instagram Algorithm 2026 — Buffer", url: "https://buffer.com/resources/instagram-algorithms/", description: "Guia completo do algoritmo Instagram: Feed, Stories, Reels, Explore" },
+    { title: "Instagram Carousel Strategy 2026 — Marketing Agent", url: "https://marketingagent.blog/2026/01/03/mastering-instagram-carousel-strategy-in-2026-the-algorithm-demands-swipes-not-just-scrolls/", description: "Estratégia completa de carrosséis: engagement 10%, swipe mechanics, 6-13 slides" },
+    { title: "Instagram Reach 2026 — TrueFuture Media", url: "https://www.truefuturemedia.com/articles/instagram-reach-2026-algorithm-reels-carousels-caption-seo", description: "Como crescer com Reels, Carrosséis e Caption SEO" },
+    { title: "Instagram Algorithm 2026 — Sprout Social", url: "https://sproutsocial.com/insights/instagram-algorithm/", description: "Análise completa do algoritmo com dados de engagement" },
+    { title: "Instagram Algorithm Tips 2026 — Hootsuite", url: "https://blog.hootsuite.com/instagram-algorithm/", description: "Dicas práticas para otimização no algoritmo Instagram" },
+    { title: "Instagram Reels Algorithm 2026 — EvergreenFeed", url: "https://www.evergreenfeed.com/blog/instagram-reels-algorithm/", description: "Como funciona o algoritmo de Reels: sends/DM como principal sinal" },
+  ],
+  lastUpdated: "2026-04-11",
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
