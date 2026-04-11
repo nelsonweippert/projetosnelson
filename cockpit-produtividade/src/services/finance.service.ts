@@ -52,6 +52,22 @@ export async function getExpensesByCategory(userId: string, month?: number, year
     .map(([category, amount]) => ({ category, amount }))
 }
 
+export async function getFixedTransactions(userId: string) {
+  return db.transaction.findMany({
+    where: { userId, isArchived: false, isFixed: true },
+    include: { area: true },
+    orderBy: { date: "desc" },
+  })
+}
+
+export async function getTransactionsRange(userId: string, startDate: Date, endDate: Date) {
+  return db.transaction.findMany({
+    where: { userId, isArchived: false, date: { gte: startDate, lte: endDate } },
+    include: { area: true },
+    orderBy: { date: "desc" },
+  })
+}
+
 export async function getFinancialGoals(userId: string) {
   return db.financialGoal.findMany({ where: { userId, isArchived: false }, orderBy: { createdAt: "desc" } })
 }
