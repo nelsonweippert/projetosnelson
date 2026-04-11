@@ -57,7 +57,7 @@ interface Props {
 
 export function TasksClient({ initialTasks, areas }: Props) {
   const [tasks, setTasks] = useState<TaskWithAreas[]>(initialTasks)
-  const [filter, setFilter] = useState<TaskStatus | "ALL">("ALL")
+  const [filter, setFilter] = useState<TaskStatus | "ALL" | "OVERDUE">("ALL")
   const [showForm, setShowForm] = useState(false)
   const [selectedTask, setSelectedTask] = useState<TaskWithAreas | null>(null)
   const [statusDropdown, setStatusDropdown] = useState<string | null>(null)
@@ -82,6 +82,8 @@ export function TasksClient({ initialTasks, areas }: Props) {
 
   const filtered = filter === "ALL"
     ? tasks.filter((t) => t.status !== "CANCELLED")
+    : filter === "OVERDUE"
+    ? tasks.filter((t) => getDueStatus(t.dueDate, t.status) === "overdue")
     : tasks.filter((t) => t.status === filter)
 
   function resetForm() {
@@ -156,8 +158,11 @@ export function TasksClient({ initialTasks, areas }: Props) {
     setSelectedTask(updated)
   }
 
-  const filterCounts = {
+  const overdueCount = tasks.filter((t) => getDueStatus(t.dueDate, t.status) === "overdue").length
+
+  const filterCounts: Record<string, number> = {
     ALL: tasks.filter((t) => t.status !== "CANCELLED").length,
+    OVERDUE: overdueCount,
     TODO: tasks.filter((t) => t.status === "TODO").length,
     IN_PROGRESS: tasks.filter((t) => t.status === "IN_PROGRESS").length,
     DONE: tasks.filter((t) => t.status === "DONE").length,
@@ -278,17 +283,24 @@ export function TasksClient({ initialTasks, areas }: Props) {
 
         {/* Filters */}
         <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1 w-fit flex-wrap">
-          {(["ALL", "TODO", "IN_PROGRESS", "DONE", "CANCELLED"] as const).map((f) => (
+          {(["ALL", "OVERDUE", "TODO", "IN_PROGRESS", "DONE", "CANCELLED"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-                filter === f ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text"
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1",
+                filter === f
+                  ? f === "OVERDUE"
+                    ? "bg-red-500/15 text-red-400 shadow-sm"
+                    : "bg-cockpit-surface text-cockpit-text shadow-sm"
+                  : f === "OVERDUE" && overdueCount > 0
+                    ? "text-red-400/70 hover:text-red-400"
+                    : "text-cockpit-muted hover:text-cockpit-text"
               )}
             >
-              {f === "ALL" ? "Ativas" : STATUS_LABEL[f as TaskStatus]}
-              <span className="ml-1.5 text-[10px] opacity-70">{filterCounts[f]}</span>
+              {f === "OVERDUE" && <AlertTriangle size={11} />}
+              {f === "ALL" ? "Ativas" : f === "OVERDUE" ? "Atrasadas" : STATUS_LABEL[f as TaskStatus]}
+              <span className="text-[10px] opacity-70">{filterCounts[f]}</span>
             </button>
           ))}
         </div>
