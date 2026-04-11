@@ -3,7 +3,7 @@
 import { useCallback, useState, useTransition } from "react"
 import {
   X, Save, Loader2, Archive, ChevronRight, ChevronLeft,
-  CheckSquare, Lightbulb, FileText, Tag, ExternalLink, Sparkles,
+  Lightbulb, FileText, ExternalLink, Sparkles,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { updateContentAction, advanceContentPhaseAction, archiveContentAction } from "@/app/actions/content.actions"
@@ -42,10 +42,14 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   const [thumbChanged, setThumbChanged] = useState(false)
   const [notes, setNotes] = useState(content.notes ?? "")
   const [notesChanged, setNotesChanged] = useState(false)
-  const [localAreaIds, setLocalAreaIds] = useState<string[]>(
-    content.areas?.map((a: any) => a.area?.id ?? a.areaId).filter(Boolean) ?? (content.areaId ? [content.areaId] : [])
-  )
-  const [checklist, setChecklist] = useState<Record<string, boolean>>(content.checklist ?? {})
+  const [localAreaIds, setLocalAreaIds] = useState<string[]>(() => {
+    try {
+      if (Array.isArray(content.areas) && content.areas.length > 0) return content.areas.map((a: any) => a.area?.id ?? a.areaId).filter(Boolean)
+      if (content.areaId) return [content.areaId]
+      return []
+    } catch { return [] }
+  })
+  const [checklist, setChecklist] = useState<Record<string, boolean>>((content.checklist && typeof content.checklist === "object") ? content.checklist as Record<string, boolean> : {})
 
   // AI
   const [aiLoading, setAiLoading] = useState<string | null>(null)
