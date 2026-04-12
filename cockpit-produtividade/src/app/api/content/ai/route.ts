@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
 
   const body = await req.json()
-  const { action, skill, phase, title, hook, script, notes, series, research } = body as {
+  const { action, skill, phase, title, hook, script, notes, series, research, targetDuration } = body as {
     action: string
     skill?: SkillId
     phase?: string
@@ -26,7 +26,14 @@ export async function POST(req: NextRequest) {
     notes?: string
     series?: string
     research?: string
+    targetDuration?: number
   }
+
+  function formatDuration(s?: number) {
+    if (!s) return "não definida"
+    return s >= 60 ? `${Math.floor(s / 60)} minutos${s % 60 > 0 ? ` e ${s % 60} segundos` : ""}` : `${s} segundos`
+  }
+  const durationCtx = targetDuration ? `\n- Duração alvo: ${formatDuration(targetDuration)} — ADAPTE todo o conteúdo para caber nesta duração` : ""
 
   const skillConfig = skill ? CONTENT_SKILLS[skill] : null
   const phaseConfig = skillConfig?.phases.find((p) => p.id === phase)
@@ -40,7 +47,7 @@ export async function POST(req: NextRequest) {
 
 Contexto do conteúdo:
 - Tipo: ${skillConfig?.label ?? "Geral"}
-- Título: ${title ?? "Não definido"}
+- Título: ${title ?? "Não definido"}${durationCtx}
 ${notes ? `- Notas: ${notes}` : ""}
 ${series ? `- Série: ${series}` : ""}
 
@@ -60,7 +67,7 @@ Gere 5 opções de HOOK. Retorne APENAS um JSON array:
 
 Contexto:
 - Tipo: ${skillConfig?.label ?? "Geral"}
-- Tema/Título atual: ${title ?? "Não definido"}
+- Tema/Título atual: ${title ?? "Não definido"}${durationCtx}
 ${hook ? `- Hook: ${hook}` : ""}
 
 Gere 6 variações de TÍTULO otimizados para clique. Retorne APENAS um JSON array:
@@ -99,12 +106,12 @@ A série deve ter progressão lógica.`
 
 Contexto do conteúdo:
 - Tipo: ${skillConfig?.label ?? "Geral"}
-- Título: ${title ?? "Não definido"}
+- Título: ${title ?? "Não definido"}${durationCtx}
 ${hook ? `- Hook definido: ${hook}` : ""}
 ${research ? `- Pesquisa/referências: ${research}` : ""}
 ${notes ? `- Notas: ${notes}` : ""}
 
-Escreva um roteiro COMPLETO seguindo as boas práticas da skill.
+Escreva um roteiro COMPLETO que caiba na duração alvo. seguindo as boas práticas da skill.
 ${skillConfig?.scriptTemplates?.[0] ? `Use como base a estrutura: ${skillConfig.scriptTemplates[0].structure.join(" → ")}` : ""}
 Marque indicações de edição como [CORTE], [B-ROLL], [ZOOM], [TEXTO: xxx], [SFX], [MÚSICA].`
       break
@@ -114,7 +121,7 @@ Marque indicações de edição como [CORTE], [B-ROLL], [ZOOM], [TEXTO: xxx], [S
 
 Contexto do conteúdo:
 - Tipo: ${skillConfig?.label ?? "Geral"}
-- Título: ${title ?? "Não definido"}
+- Título: ${title ?? "Não definido"}${durationCtx}
 ${hook ? `- Hook: ${hook}` : ""}
 
 Sugira um plano de pesquisa completo:
@@ -129,7 +136,7 @@ Sugira um plano de pesquisa completo:
       prompt = `Você é um especialista em design de thumbnails para ${skillConfig?.label ?? "conteúdo digital"}.
 
 Contexto:
-- Título: ${title ?? "Não definido"}
+- Título: ${title ?? "Não definido"}${durationCtx}
 ${hook ? `- Hook: ${hook}` : ""}
 ${notes ? `- Notas visuais: ${notes}` : ""}
 
@@ -150,7 +157,7 @@ Numere cada conceito.`
 
 Contexto do conteúdo:
 - Tipo: ${skillConfig?.label ?? "Geral"}
-- Título: ${title ?? "Não definido"}
+- Título: ${title ?? "Não definido"}${durationCtx}
 ${hook ? `- Hook: ${hook}` : ""}
 ${script ? `- Roteiro (resumo): ${script.substring(0, 500)}` : ""}
 ${notes ? `- Notas: ${notes}` : ""}
@@ -171,7 +178,7 @@ Formate a descrição pronta para copiar e colar na plataforma.`
 Revise este conteúdo e dê feedback detalhado:
 
 - Tipo: ${skillConfig?.label ?? "Geral"}
-- Título: ${title ?? "Não definido"}
+- Título: ${title ?? "Não definido"}${durationCtx}
 ${hook ? `- Hook: ${hook}` : ""}
 ${script ? `- Roteiro:\n${script}` : ""}
 ${research ? `- Pesquisa: ${research}` : ""}

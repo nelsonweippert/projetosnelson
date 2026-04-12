@@ -49,6 +49,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
 
   // Fields
   const [title, setTitle] = useState(content.title)
+  const [targetDuration, setTargetDuration] = useState<number>(content.targetDuration ?? 0)
   const [hook, setHook] = useState(content.hook ?? "")
   const [script, setScript] = useState(content.script ?? "")
   const [research, setResearch] = useState(content.research ?? "")
@@ -115,7 +116,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
         body: JSON.stringify({
           action, skill: content.skill, phase: content.phase,
           title, hook, script, notes: notes + (extraContext ? `\n\nConsiderações: ${extraContext}` : ""),
-          research, series: content.series,
+          research, series: content.series, targetDuration,
         }),
       })
       if (res.ok) {
@@ -247,16 +248,57 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   function renderPhase() {
     const p = content.phase as string
 
-    if (p === "IDEA") return (<>
-      <PhaseHeader phase="IDEA" />
-      <div className="flex flex-wrap gap-2 mb-6">
-        <AiBtn action="generate_hook" label="Gerar hooks" />
-        <AiBtn action="generate_research" label="Sugerir pesquisa" />
-      </div>
-      <AiResultPanel acceptField={aiAction === "generate_research" ? "research" : undefined} />
-      <Field label="Hook — o gancho dos primeiros segundos" value={hook} onChange={setHook} field="hook" placeholder="O que vai parar o scroll?" rows={3} />
-      <Field label="Pesquisa & Referências" value={research} onChange={setResearch} field="research" placeholder="Links, dados, fontes, inspirações..." rows={4} />
-    </>)
+    if (p === "IDEA") {
+      const isShort = content.skill === "SHORT_VIDEO"
+      const isLong = content.skill === "LONG_VIDEO"
+      const isInsta = content.skill === "INSTAGRAM"
+      const presets = isShort
+        ? [{ label: "15s", value: 15 }, { label: "30s", value: 30 }, { label: "60s", value: 60 }, { label: "90s", value: 90 }]
+        : isLong
+        ? [{ label: "8 min", value: 480 }, { label: "10 min", value: 600 }, { label: "15 min", value: 900 }, { label: "20 min", value: 1200 }, { label: "25 min", value: 1500 }]
+        : [{ label: "15s", value: 15 }, { label: "30s", value: 30 }, { label: "60s", value: 60 }, { label: "90s", value: 90 }]
+
+      function formatDur(s: number) { return s >= 60 ? `${Math.floor(s / 60)} min${s % 60 > 0 ? ` ${s % 60}s` : ""}` : `${s}s` }
+
+      return (<>
+        <PhaseHeader phase="IDEA" />
+
+        {/* Duration selector */}
+        <div className="mb-6">
+          <p className="text-xs font-medium text-cockpit-muted mb-2">Duração estimada do conteúdo</p>
+          <div className="flex flex-wrap gap-2">
+            {presets.map((p) => (
+              <button key={p.value} onClick={() => { setTargetDuration(p.value); save({ targetDuration: p.value }) }}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-sm font-medium border transition-all",
+                  targetDuration === p.value ? "bg-accent text-black border-accent" : "border-cockpit-border text-cockpit-muted hover:border-accent/30 hover:text-cockpit-text"
+                )}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {targetDuration > 0 && (
+            <p className="text-[10px] text-cockpit-muted mt-2">
+              {isShort && targetDuration <= 30 && "Ideal para conteúdo direto: hook → ponto único → CTA. Máxima taxa de conclusão."}
+              {isShort && targetDuration > 30 && targetDuration <= 60 && "Sweet spot: espaço para storytelling ou tutorial com 3-5 pontos. Melhor balanço views/engajamento."}
+              {isShort && targetDuration > 60 && "Formato longo para Shorts/Reels: permite aprofundamento mas exige retenção alta. Use curiosity stacking."}
+              {isLong && targetDuration <= 600 && "Formato compacto: ideal para tutoriais diretos ou análises rápidas. Foco em eficiência."}
+              {isLong && targetDuration > 600 && targetDuration <= 900 && "Formato clássico do YouTube: espaço ideal para conteúdo denso com bom AVD."}
+              {isLong && targetDuration > 900 && "Formato longo: requer excelente estrutura de retenção. Use capítulos e open loops a cada 3-4 min."}
+              {isInsta && "Reels 30-90s performam melhor para educação. 15s para trends virais."}
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-6">
+          <AiBtn action="generate_hook" label="Gerar hooks" />
+          <AiBtn action="generate_research" label="Sugerir pesquisa" />
+        </div>
+        <AiResultPanel acceptField={aiAction === "generate_research" ? "research" : undefined} />
+        <Field label="Hook — o gancho dos primeiros segundos" value={hook} onChange={setHook} field="hook" placeholder="O que vai parar o scroll?" rows={3} />
+        <Field label="Pesquisa & Referências" value={research} onChange={setResearch} field="research" placeholder="Links, dados, fontes, inspirações..." rows={4} />
+      </>)
+    }
 
     if (p === "RESEARCH") return (<>
       <PhaseHeader phase="RESEARCH" />

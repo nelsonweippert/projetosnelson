@@ -305,6 +305,7 @@ model Content {
   format         ContentFormat @default(LONG_VIDEO)
   phase          ContentPhase  @default(IDEA)
   skill          ContentSkill?
+  targetDuration Int?
   hook           String?
   script         String?
   series         String?
