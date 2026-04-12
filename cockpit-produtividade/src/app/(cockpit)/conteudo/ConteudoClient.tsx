@@ -598,28 +598,27 @@ export function ConteudoClient({ initialContents, areas }: Props) {
             </div>
 
             {/* Filters */}
-            {ideaFeed.length > 0 && (() => {
-              const allTermsInFeed = [...new Set(ideaFeed.map((i: any) => i.term).filter(Boolean))]
-              const availableCount = ideaFeed.filter((i) => !i.isUsed).length
-              const usedCount = ideaFeed.filter((i) => i.isUsed).length
-              return (
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1">
-                    <button onClick={() => setIdeaTermFilter("ALL")} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", ideaTermFilter === "ALL" ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
-                      Todos <span className="text-[10px] opacity-70 ml-1">{availableCount}</span>
-                    </button>
-                    {allTermsInFeed.map((term: string) => (
-                      <button key={term} onClick={() => setIdeaTermFilter(term)} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", ideaTermFilter === term ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
-                        {term} <span className="text-[10px] opacity-70 ml-1">{ideaFeed.filter((i: any) => i.term === term && !i.isUsed).length}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <button onClick={() => setShowUsedIdeas(!showUsedIdeas)} className={cn("px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors", showUsedIdeas ? "border-accent/30 bg-accent/10 text-accent" : "border-cockpit-border text-cockpit-muted hover:text-cockpit-text")}>
-                    {showUsedIdeas ? "Esconder" : "Mostrar"} usadas <span className="text-[10px] opacity-70 ml-1">{usedCount}</span>
+            {/* Filtro por termos monitorados */}
+            {monitorTerms.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1 flex-wrap">
+                  <button onClick={() => setIdeaTermFilter("ALL")} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", ideaTermFilter === "ALL" ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
+                    Todos <span className="text-[10px] opacity-70 ml-1">{ideaFeed.filter((i) => !i.isUsed).length}</span>
                   </button>
+                  {monitorTerms.filter((t: any) => t.isActive).map((t: any) => {
+                    const count = ideaFeed.filter((i: any) => !i.isUsed && i.term?.toLowerCase().includes(t.term.toLowerCase())).length
+                    return (
+                      <button key={t.id} onClick={() => setIdeaTermFilter(t.term)} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", ideaTermFilter === t.term ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
+                        {t.term} <span className="text-[10px] opacity-70 ml-1">{count}</span>
+                      </button>
+                    )
+                  })}
                 </div>
-              )
-            })()}
+                <button onClick={() => setShowUsedIdeas(!showUsedIdeas)} className={cn("px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors", showUsedIdeas ? "border-accent/30 bg-accent/10 text-accent" : "border-cockpit-border text-cockpit-muted hover:text-cockpit-text")}>
+                  {showUsedIdeas ? "Esconder" : "Mostrar"} usadas <span className="text-[10px] opacity-70 ml-1">{ideaFeed.filter((i) => i.isUsed).length}</span>
+                </button>
+              </div>
+            )}
 
             {ideaFeed.length === 0 ? (
               <div className="cockpit-card flex flex-col items-center justify-center py-16 text-cockpit-muted">
@@ -631,7 +630,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
               <div className="space-y-2">
                 {ideaFeed
                   .filter((i: any) => showUsedIdeas ? true : !i.isUsed)
-                  .filter((i: any) => ideaTermFilter === "ALL" || i.term === ideaTermFilter)
+                  .filter((i: any) => ideaTermFilter === "ALL" || i.term?.toLowerCase().includes(ideaTermFilter.toLowerCase()))
                   .map((idea: any) => (
                   <div key={idea.id} className={cn("cockpit-card !p-0 group transition-colors", idea.isUsed ? "opacity-60" : "hover:border-accent/30")}>
                     <div className="px-5 py-4">
