@@ -7,65 +7,101 @@ export const maxDuration = 120
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-// ── Fetch real news from Google News RSS ────────────────────────────────
+interface RawItem { title: string; url?: string; date?: string; source: string }
 
-async function fetchNewsForTerm(term: string): Promise<{ title: string; link: string; date: string }[]> {
+// ── 1. Google News RSS ──────────────────────────────────────────────────
+
+async function fetchGoogleNews(term: string): Promise<RawItem[]> {
   try {
-    const encoded = encodeURIComponent(term)
-    const url = `https://news.google.com/rss/search?q=${encoded}&hl=pt-BR&gl=BR&ceid=BR:pt-419`
-    const res = await fetch(url, { next: { revalidate: 0 } })
-    if (!res.ok) return []
-    const xml = await res.text()
-
-    // Parse RSS XML (simple regex extraction)
-    const items: { title: string; link: string; date: string }[] = []
-    const itemRegex = /<item>([\s\S]*?)<\/item>/g
-    let match
-    while ((match = itemRegex.exec(xml)) !== null && items.length < 10) {
-      const itemXml = match[1]
-      const titleMatch = itemXml.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || itemXml.match(/<title>(.*?)<\/title>/)
-      const linkMatch = itemXml.match(/<link>(.*?)<\/link>/)
-      const dateMatch = itemXml.match(/<pubDate>(.*?)<\/pubDate>/)
-      if (titleMatch) {
-        items.push({
-          title: titleMatch[1].replace(/<[^>]*>/g, "").trim(),
-          link: linkMatch?.[1] || "",
-          date: dateMatch?.[1] || "",
-        })
+    const items: RawItem[] = []
+    for (const hl of ["pt-BR", "en"]) {
+      const ceid = hl === "pt-BR" ? "BR:pt-419" : "US:en"
+      const url = `https://news.google.com/rss/search?q=${encodeURIComponent(term)}&hl=${hl}&gl=${hl === "pt-BR" ? "BR" : "US"}&ceid=${ceid}`
+      const res = await fetch(url)
+      if (!res.ok) continue
+      const xml = await res.text()
+      const re = /<item>([\s\S]*?)<\/item>/g
+      let m
+      while ((m = re.exec(xml)) !== null && items.length < 12) {
+        const t = m[1].match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || m[1].match(/<title>(.*?)<\/title>/)
+        const d = m[1].match(/<pubDate>(.*?)<\/pubDate>/)
+        if (t) items.push({ title: t[1].replace(/<[^>]*>/g, "").trim(), date: d?.[1], source: "Google News" })
       }
     }
     return items
-  } catch (err) {
-    console.error(`[news] Failed to fetch for "${term}":`, err)
-    return []
-  }
+  } catch { return [] }
 }
 
-// ── Fetch trending from YouTube ─────────────────────────────────────────
+// ── 2. YouTube Search ───────────────────────────────────────────────────
 
-async function fetchYouTubeTrends(term: string): Promise<string[]> {
+async function fetchYouTube(term: string): Promise<RawItem[]> {
   try {
-    const encoded = encodeURIComponent(term)
-    const url = `https://www.youtube.com/results?search_query=${encoded}&sp=CAISBAgBEAE%253D`
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "pt-BR" },
-      next: { revalidate: 0 },
-    })
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(term)}&sp=CAISBAgBEAE%253D`
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "pt-BR" } })
     if (!res.ok) return []
     const html = await res.text()
-
-    // Extract video titles from YouTube HTML
-    const titles: string[] = []
-    const titleRegex = /"title":\{"runs":\[\{"text":"(.*?)"\}/g
+    const items: RawItem[] = []
+    const re = /"title":\{"runs":\[\{"text":"(.*?)"\}/g
     let m
-    while ((m = titleRegex.exec(html)) !== null && titles.length < 8) {
+    while ((m = re.exec(html)) !== null && items.length < 8) {
       const decoded = m[1].replace(/\\u0026/g, "&").replace(/\\"/g, '"')
-      if (decoded.length > 10 && decoded.length < 150) titles.push(decoded)
+      if (decoded.length > 10 && decoded.length < 150) items.push({ title: decoded, source: "YouTube" })
     }
-    return titles
-  } catch {
-    return []
-  }
+    return items
+  } catch { return [] }
+}
+
+// ── 3. Reddit ───────────────────────────────────────────────────────────
+
+async function fetchReddit(term: string): Promise<RawItem[]> {
+  try {
+    const url = `https://www.reddit.com/search.json?q=${encodeURIComponent(term)}&sort=hot&t=day&limit=8`
+    const res = await fetch(url, { headers: { "User-Agent": "IdeaAgent/1.0" } })
+    if (!res.ok) return []
+    const data = await res.json()
+    return (data?.data?.children ?? [])
+      .filter((c: any) => c.data?.title && c.data?.score > 30)
+      .slice(0, 8)
+      .map((c: any) => ({ title: c.data.title, url: `https://reddit.com${c.data.permalink}`, source: `Reddit r/${c.data.subreddit}` }))
+  } catch { return [] }
+}
+
+// ── 4. Google Trends Brasil ─────────────────────────────────────────────
+
+async function fetchGoogleTrends(): Promise<RawItem[]> {
+  try {
+    const res = await fetch("https://trends.google.com.br/trending/rss?geo=BR")
+    if (!res.ok) return []
+    const xml = await res.text()
+    const items: RawItem[] = []
+    const re = /<item>([\s\S]*?)<\/item>/g
+    let m
+    while ((m = re.exec(xml)) !== null && items.length < 12) {
+      const t = m[1].match(/<title>(.*?)<\/title>/)
+      if (t) items.push({ title: t[1].replace(/<[^>]*>/g, "").trim(), source: "Google Trends Brasil" })
+    }
+    return items
+  } catch { return [] }
+}
+
+// ── 5. Hacker News ──────────────────────────────────────────────────────
+
+async function fetchHackerNews(): Promise<RawItem[]> {
+  try {
+    const idsRes = await fetch("https://hacker-news.firebaseio.com/v0/topstories.json")
+    if (!idsRes.ok) return []
+    const ids: number[] = await idsRes.json()
+    const items: RawItem[] = []
+    await Promise.all(ids.slice(0, 15).map(async (id) => {
+      try {
+        const r = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
+        if (!r.ok) return
+        const item = await r.json()
+        if (item?.title && item?.score > 80) items.push({ title: item.title, url: item.url, source: "Hacker News" })
+      } catch {}
+    }))
+    return items.slice(0, 8)
+  } catch { return [] }
 }
 
 // ── Main handler ────────────────────────────────────────────────────────
@@ -78,142 +114,74 @@ export async function POST(req: NextRequest) {
   const terms = await db.monitorTerm.findMany({ where: { userId, isActive: true } })
   if (terms.length === 0) return NextResponse.json({ error: "Adicione termos de monitoramento primeiro" }, { status: 400 })
 
-  // Get user's custom research sources
-  const userSources = await db.skillSource.findMany({
-    where: { userId, skillId: "RESEARCH" }, orderBy: { createdAt: "desc" }, take: 20,
-  })
-  const customSourcesCtx = userSources.length > 0
-    ? `\n\nFontes adicionais do usuário:\n${userSources.map((s) => `- ${s.title}${s.url ? ` (${s.url})` : ""}${s.content ? `: ${s.content}` : ""}`).join("\n")}`
-    : ""
+  const userSources = await db.skillSource.findMany({ where: { userId, skillId: "RESEARCH" }, take: 20 })
 
   try {
-    // Step 1: Fetch REAL news for each term in parallel
-    const newsPerTerm: Record<string, { news: { title: string; link: string; date: string }[]; ytTrends: string[] }> = {}
+    // Fetch ALL sources in parallel
+    const [googleTrends, hackerNews] = await Promise.all([fetchGoogleTrends(), fetchHackerNews()])
 
+    const perTerm: Record<string, { news: RawItem[]; yt: RawItem[]; reddit: RawItem[] }> = {}
     await Promise.all(terms.map(async (t) => {
-      const [news, ytTrends] = await Promise.all([
-        fetchNewsForTerm(t.term),
-        fetchYouTubeTrends(t.term),
-      ])
-      newsPerTerm[t.term] = { news, ytTrends }
+      const [news, yt, reddit] = await Promise.all([fetchGoogleNews(t.term), fetchYouTube(t.term), fetchReddit(t.term)])
+      perTerm[t.term] = { news, yt, reddit }
     }))
 
-    // Step 2: Build context with REAL data
-    let newsContext = ""
+    // Build context
+    let ctx = "DADOS COLETADOS EM TEMPO REAL:\n"
+    if (googleTrends.length > 0) { ctx += "\n=== GOOGLE TRENDS BRASIL ===\n"; googleTrends.forEach((t, i) => { ctx += `${i + 1}. ${t.title}\n` }) }
+    if (hackerNews.length > 0) { ctx += "\n=== HACKER NEWS ===\n"; hackerNews.forEach((t, i) => { ctx += `${i + 1}. ${t.title}\n` }) }
     for (const t of terms) {
-      const data = newsPerTerm[t.term]
-      newsContext += `\n\n=== TERMO: "${t.term}" ===\n`
-      if (data.news.length > 0) {
-        newsContext += `NOTÍCIAS REAIS DE HOJE (Google News):\n`
-        data.news.forEach((n, i) => { newsContext += `${i + 1}. ${n.title} (${n.date})\n` })
-      }
-      if (data.ytTrends.length > 0) {
-        newsContext += `\nVÍDEOS EM ALTA NO YOUTUBE:\n`
-        data.ytTrends.forEach((t, i) => { newsContext += `${i + 1}. ${t}\n` })
-      }
+      const d = perTerm[t.term]
+      ctx += `\n=== TERMO: "${t.term}" ===\n`
+      if (d.news.length > 0) { ctx += "GOOGLE NEWS:\n"; d.news.forEach((n, i) => { ctx += `${i + 1}. ${n.title}${n.date ? ` [${n.date}]` : ""}\n` }) }
+      if (d.yt.length > 0) { ctx += "YOUTUBE:\n"; d.yt.forEach((v, i) => { ctx += `${i + 1}. ${v.title}\n` }) }
+      if (d.reddit.length > 0) { ctx += "REDDIT:\n"; d.reddit.forEach((r, i) => { ctx += `${i + 1}. ${r.title} [${r.source}]\n` }) }
     }
+    if (userSources.length > 0) { ctx += "\n=== FONTES DO USUÁRIO ===\n"; userSources.forEach((s) => { ctx += `- ${s.title}${s.url ? ` (${s.url})` : ""}\n` }) }
 
-    // Step 3: Ask Claude to generate ideas based on REAL data
-    const ideasPerTerm = Math.max(3, Math.floor(10 / terms.length))
-    const searchPrompt = `Você é um curador de conteúdo digital que analisa notícias e tendências REAIS para identificar oportunidades de conteúdo.
+    const ideasPerTerm = Math.max(4, Math.floor(10 / terms.length))
 
-Abaixo estão NOTÍCIAS REAIS e VÍDEOS EM ALTA coletados AGORA de Google News e YouTube:
-${newsContext}
-${customSourcesCtx}
+    const prompt = `Você é um curador de conteúdo digital. Analise os dados REAIS abaixo e identifique oportunidades de conteúdo.
 
-Com base EXCLUSIVAMENTE nestas notícias e tendências REAIS acima, gere ${ideasPerTerm} ideias de conteúdo para CADA termo monitorado.
+${ctx}
 
-REGRAS:
-1. Cada ideia DEVE ser baseada em uma notícia ou tendência REAL listada acima
-2. O campo "term" DEVE ser EXATAMENTE um destes valores: ${terms.map((t) => `"${t.term}"`).join(", ")}
-3. Distribua igualmente entre os termos
-4. Priorize notícias das últimas 24-48h
-5. Score 90-100 baseado em: quão recente é, potencial viral, e lacuna de conteúdo
+Gere ${ideasPerTerm} ideias para CADA termo. Baseie-se EXCLUSIVAMENTE nos dados acima.
+Cruze fontes: tema em 3+ fontes = score alto. Priorize últimas 24-48h.
 
-Retorne APENAS um JSON array (sem markdown, sem code blocks):
-[{
-  "title": "título atrativo para o conteúdo baseado na notícia real",
-  "summary": "resumo de 2-3 frases conectando a notícia à oportunidade de conteúdo",
-  "angle": "ângulo único para diferenciar seu conteúdo",
-  "hook": "sugestão de hook para os primeiros 3 segundos",
-  "term": "EXATAMENTE um dos termos listados",
-  "relevance": "notícia real que originou esta ideia + por que é relevante AGORA",
-  "source": "Google News / YouTube Trending",
-  "score": 95
-}]`
+O campo "term" DEVE ser EXATAMENTE um destes: ${terms.map((t) => `"${t.term}"`).join(", ")}
 
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4096,
-      messages: [{ role: "user", content: searchPrompt }],
-    })
+Score: 97-100 viral agora, 94-96 boa janela, 90-93 relevante.
 
-    const responseText = message.content[0]
-    if (responseText.type !== "text") {
-      return NextResponse.json({ error: "Resposta inesperada da IA" }, { status: 500 })
-    }
+Retorne APENAS JSON array:
+[{"title":"...","summary":"...","angle":"...","hook":"...","term":"...","relevance":"...","source":"...","score":95}]`
 
-    // Parse JSON
-    const cleanJson = responseText.text.replace(/```json?\n?/g, "").replace(/```/g, "").trim()
+    const message = await anthropic.messages.create({ model: "claude-sonnet-4-6", max_tokens: 4096, messages: [{ role: "user", content: prompt }] })
+    const text = message.content[0]
+    if (text.type !== "text") return NextResponse.json({ error: "Erro IA" }, { status: 500 })
+
+    const clean = text.text.replace(/```json?\n?/g, "").replace(/```/g, "").trim()
     let ideas: any[]
-    try {
-      ideas = JSON.parse(cleanJson)
-    } catch {
-      const match = cleanJson.match(/\[[\s\S]*\]/)
-      if (match) ideas = JSON.parse(match[0])
-      else {
-        console.error("[ideas] Failed to parse:", cleanJson.substring(0, 500))
-        return NextResponse.json({ error: "Erro ao processar resposta da IA" }, { status: 500 })
-      }
-    }
+    try { ideas = JSON.parse(clean) } catch { const m = clean.match(/\[[\s\S]*\]/); if (m) ideas = JSON.parse(m[0]); else return NextResponse.json({ error: "Erro parse" }, { status: 500 }) }
 
-    // Validate terms
     const termNames = terms.map((t) => t.term)
-    ideas = ideas
-      .filter((i: any) => i.title && i.summary)
-      .map((i: any) => {
-        let matchedTerm = termNames.find((t) => t === i.term)
-        if (!matchedTerm) {
-          matchedTerm = termNames.find((t) => {
-            const words = t.toLowerCase().split(/\s+/)
-            const ideaText = `${i.term || ""} ${i.title || ""}`.toLowerCase()
-            return words.some((w) => w.length >= 2 && ideaText.includes(w))
-          }) || termNames[0]
-        }
-        return { ...i, term: matchedTerm, score: Math.min(100, Math.max(90, i.score || 90)) }
-      })
-      .sort((a: any, b: any) => b.score - a.score)
+    ideas = ideas.filter((i: any) => i.title && i.summary).map((i: any) => {
+      let matched = termNames.find((t) => t === i.term)
+      if (!matched) matched = termNames.find((t) => t.toLowerCase().split(/\s+/).some((w) => w.length >= 2 && (i.term || i.title || "").toLowerCase().includes(w))) || termNames[0]
+      return { ...i, term: matched, score: Math.min(100, Math.max(90, i.score || 90)) }
+    }).sort((a: any, b: any) => b.score - a.score)
 
-    // Save
-    const created = await db.ideaFeed.createMany({
-      data: ideas.map((idea: any) => ({
-        title: idea.title,
-        summary: idea.summary,
-        angle: idea.angle || null,
-        hook: idea.hook || null,
-        term: idea.term,
-        relevance: `[${idea.score}/100] ${idea.relevance || ""}`.trim(),
-        source: idea.source || "Google News + YouTube",
-        score: idea.score,
-        userId,
+    await db.ideaFeed.createMany({
+      data: ideas.map((i: any) => ({
+        title: i.title, summary: i.summary, angle: i.angle || null, hook: i.hook || null,
+        term: i.term, relevance: `[${i.score}/100] ${i.relevance || ""}`, source: i.source || "Multi-source",
+        score: i.score, userId,
       })),
     })
 
-    // Return all ideas
-    const allIdeas = await db.ideaFeed.findMany({
-      where: { userId, isDiscarded: false },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    })
-
-    return NextResponse.json({
-      ok: true,
-      created: created.count,
-      ideas: allIdeas,
-      debug: { newsFound: Object.fromEntries(terms.map((t) => [t.term, newsPerTerm[t.term]?.news?.length ?? 0])) },
-    })
+    const allIdeas = await db.ideaFeed.findMany({ where: { userId, isDiscarded: false }, orderBy: { createdAt: "desc" }, take: 100 })
+    return NextResponse.json({ ok: true, created: ideas.length, ideas: allIdeas })
   } catch (err) {
-    console.error("[ideas] Error:", err)
-    return NextResponse.json({ error: "Erro ao gerar ideias: " + (err instanceof Error ? err.message : String(err)) }, { status: 500 })
+    console.error("[ideas]", err)
+    return NextResponse.json({ error: "Erro: " + (err instanceof Error ? err.message : String(err)) }, { status: 500 })
   }
 }
