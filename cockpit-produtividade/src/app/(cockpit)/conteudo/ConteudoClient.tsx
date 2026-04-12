@@ -20,17 +20,18 @@ import { ContentDetailPanel } from "./ContentDetailPanel"
 type Content = any
 
 const PHASE_LABEL: Record<string, string> = {
-  IDEATION: "Idealização", ELABORATION: "Elaboração",
+  IDEATION: "Idealização", ELABORATION: "Elaboração", BRIEFING: "Briefing",
   EDITING_SENT: "Em edição", PUBLISHED: "Publicado", ARCHIVED: "Arquivado",
 }
 const PHASE_COLOR: Record<string, string> = {
   IDEATION: "bg-violet-500/15 text-violet-500 border-violet-500/20",
   ELABORATION: "bg-amber-500/15 text-amber-500 border-amber-500/20",
+  BRIEFING: "bg-orange-500/15 text-orange-500 border-orange-500/20",
   EDITING_SENT: "bg-pink-500/15 text-pink-500 border-pink-500/20",
   PUBLISHED: "bg-accent/15 text-accent-dark border-accent/20",
 }
 const SKILL_ICON: Record<string, string> = { SHORT_VIDEO: "⚡", LONG_VIDEO: "🎬", INSTAGRAM: "📸" }
-const PIPELINE_PHASES: ContentPhase[] = ["IDEATION", "ELABORATION", "EDITING_SENT", "PUBLISHED"]
+const PIPELINE_PHASES: ContentPhase[] = ["IDEATION", "ELABORATION", "BRIEFING", "EDITING_SENT", "PUBLISHED"]
 
 type Tab = "overview" | "pipeline" | "ideas" | "skills"
 type ViewMode = "pipeline" | "list"
@@ -174,6 +175,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
       total: contents.length,
       ideas: phase["IDEATION"] || 0,
       elaboration: phase["ELABORATION"] || 0,
+      briefing: phase["BRIEFING"] || 0,
       editingSent: phase["EDITING_SENT"] || 0,
       published: phase["PUBLISHED"] || 0,
       phase, skill, series,

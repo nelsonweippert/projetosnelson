@@ -98,7 +98,7 @@ export async function getContentStats(userId: string) {
   return {
     total: contents.length,
     ideas: contents.filter((c) => c.phase === "IDEATION").length,
-    inProduction: contents.filter((c) => c.phase === "ELABORATION").length,
+    inProduction: contents.filter((c) => c.phase === "ELABORATION" || c.phase === "BRIEFING").length,
     editingSent: contents.filter((c) => c.phase === "EDITING_SENT").length,
     published: contents.filter((c) => c.phase === "PUBLISHED").length,
     bySkill: {

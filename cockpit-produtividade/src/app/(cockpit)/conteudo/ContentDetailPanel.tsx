@@ -4,7 +4,7 @@ import { useCallback, useState, useTransition } from "react"
 import {
   X, Loader2, Archive, ChevronRight, ChevronLeft,
   Lightbulb, FileText, ExternalLink, Sparkles, RefreshCw,
-  Scissors, Send, PenTool,
+  Scissors, Send, PenTool, ClipboardList, Mic,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { updateContentAction, advanceContentPhaseAction, archiveContentAction } from "@/app/actions/content.actions"
@@ -14,31 +14,28 @@ import type { Area, ContentPhase } from "@/types"
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Content = any
 
-const PHASES: { id: ContentPhase; label: string; icon: React.ElementType; color: string }[] = [
-  { id: "IDEATION", label: "Idealização", icon: Lightbulb, color: "text-violet-500" },
-  { id: "ELABORATION", label: "Elaboração", icon: PenTool, color: "text-amber-500" },
-  { id: "EDITING_SENT", label: "Enviado p/ Edição", icon: Scissors, color: "text-pink-500" },
-  { id: "PUBLISHED", label: "Publicado", icon: Send, color: "text-accent" },
+const PHASES: { id: ContentPhase; label: string; icon: React.ElementType }[] = [
+  { id: "IDEATION", label: "Idealização", icon: Lightbulb },
+  { id: "ELABORATION", label: "Elaboração", icon: PenTool },
+  { id: "BRIEFING", label: "Briefing", icon: ClipboardList },
+  { id: "EDITING_SENT", label: "Em Edição", icon: Scissors },
+  { id: "PUBLISHED", label: "Publicado", icon: Send },
 ]
 
-// Sub-sections dentro de Elaboração
-const ELABORATION_SECTIONS = ["hook", "roteiro", "titulo", "thumbnail", "descricao"] as const
-type ElabSection = typeof ELABORATION_SECTIONS[number]
-const ELAB_LABEL: Record<ElabSection, string> = { hook: "Hook", roteiro: "Roteiro", titulo: "Título", thumbnail: "Thumbnail", descricao: "Descrição & Hashtags" }
+const ELAB_SECTIONS = ["hook", "roteiro", "titulo", "thumbnail", "descricao"] as const
+type ElabSection = typeof ELAB_SECTIONS[number]
+const ELAB_LABEL: Record<ElabSection, string> = { hook: "Hook", roteiro: "Roteiro", titulo: "Título", thumbnail: "Thumbnail", descricao: "Descrição" }
 
 interface Props {
-  content: Content
-  areas: Area[]
-  onClose: () => void
-  onUpdate: (c: Content) => void
-  onArchive: (id: string) => void
+  content: Content; areas: Area[]
+  onClose: () => void; onUpdate: (c: Content) => void; onArchive: (id: string) => void
 }
 
 export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchive }: Props) {
   const [isPending, startTransition] = useTransition()
   const skill = content.skill ? CONTENT_SKILLS[content.skill as SkillId] : null
 
-  // Fields
+  // All fields
   const [title, setTitle] = useState(content.title)
   const [targetDuration, setTargetDuration] = useState<number>(content.targetDuration ?? 0)
   const [hook, setHook] = useState(content.hook ?? "")
@@ -51,15 +48,13 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   const [localAreaIds, setLocalAreaIds] = useState<string[]>(() => {
     try {
       if (Array.isArray(content.areas) && content.areas.length > 0) return content.areas.map((a: any) => a.area?.id ?? a.areaId).filter(Boolean)
-      if (content.areaId) return [content.areaId]
-      return []
+      return content.areaId ? [content.areaId] : []
     } catch { return [] }
   })
 
-  // Elaboration active section
   const [activeSection, setActiveSection] = useState<ElabSection>("hook")
 
-  // AI
+  // AI state — persists across sub-tab changes
   const [aiLoading, setAiLoading] = useState<string | null>(null)
   const [aiResult, setAiResult] = useState<string | null>(null)
   const [aiOptions, setAiOptions] = useState<any[] | null>(null)
@@ -67,11 +62,15 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   const [aiAction, setAiAction] = useState<string | null>(null)
   const [aiConsideration, setAiConsideration] = useState("")
 
-  const currentPhaseIdx = PHASES.findIndex((p) => p.id === content.phase)
-  const prevPhase = currentPhaseIdx > 0 ? PHASES[currentPhaseIdx - 1] : null
-  const nextPhase = currentPhaseIdx < PHASES.length - 1 ? PHASES[currentPhaseIdx + 1] : null
+  const curIdx = PHASES.findIndex((p) => p.id === content.phase)
+  const prevPhase = curIdx > 0 ? PHASES[curIdx - 1] : null
+  const nextPhase = curIdx < PHASES.length - 1 ? PHASES[curIdx + 1] : null
 
-  // ── Helpers ───────────────────────────────────────────────────────────
+  const durationPresets = content.skill === "LONG_VIDEO"
+    ? [{ l: "8 min", v: 480 }, { l: "10 min", v: 600 }, { l: "15 min", v: 900 }, { l: "20 min", v: 1200 }, { l: "25 min", v: 1500 }, { l: "30 min", v: 1800 }]
+    : [{ l: "30s", v: 30 }, { l: "60s", v: 60 }, { l: "1:30", v: 90 }, { l: "2:00", v: 120 }, { l: "2:30", v: 150 }, { l: "3:00", v: 180 }]
+
+  // ── Save ──────────────────────────────────────────────────────────────
 
   function save(data: Record<string, unknown>) {
     startTransition(async () => {
@@ -81,23 +80,16 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   }
 
   function handlePhaseChange(phase: ContentPhase) {
-    startTransition(async () => {
-      const result = await advanceContentPhaseAction(content.id, phase)
-      if (result.success) onUpdate(result.data as Content)
-    })
+    startTransition(async () => { const r = await advanceContentPhaseAction(content.id, phase); if (r.success) onUpdate(r.data as Content) })
   }
 
   function handleArchive() {
-    startTransition(async () => {
-      const result = await archiveContentAction(content.id)
-      if (result.success) { onArchive(content.id); onClose() }
-    })
+    startTransition(async () => { const r = await archiveContentAction(content.id); if (r.success) { onArchive(content.id); onClose() } })
   }
 
   function handleToggleArea(areaId: string) {
     const next = localAreaIds.includes(areaId) ? localAreaIds.filter((id) => id !== areaId) : [...localAreaIds, areaId]
-    setLocalAreaIds(next)
-    save({ areaIds: next })
+    setLocalAreaIds(next); save({ areaIds: next })
   }
 
   // ── AI ────────────────────────────────────────────────────────────────
@@ -107,11 +99,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
     try {
       const res = await fetch("/api/content/ai", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action, skill: content.skill, phase: content.phase,
-          title, hook, script, notes: notes + (extraContext ? `\n\nConsiderações: ${extraContext}` : ""),
-          research, series: content.series, targetDuration,
-        }),
+        body: JSON.stringify({ action, skill: content.skill, phase: content.phase, title, hook, script, notes: notes + (extraContext ? `\nConsiderações: ${extraContext}` : ""), research, series: null, targetDuration }),
       })
       if (res.ok) {
         const data = await res.json()
@@ -120,7 +108,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
       } else setAiResult("Erro. Verifique a ANTHROPIC_API_KEY.")
     } catch { setAiResult("Erro de conexão.") }
     setAiLoading(null); setAiConsideration("")
-  }, [content.skill, content.phase, content.series, title, hook, script, notes, research, targetDuration])
+  }, [content.skill, content.phase, title, hook, script, notes, research, targetDuration])
 
   function selectOption(opt: any) {
     if (aiField === "hook") { setHook(opt.text); save({ hook: opt.text }) }
@@ -131,7 +119,6 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   function useResult(field: string) {
     if (!aiResult) return
     if (field === "research" && research.trim()) {
-      // Append to existing research
       const combined = `${research}\n\n---\n\n${aiResult}`
       setResearch(combined); save({ research: combined })
     } else {
@@ -159,8 +146,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   }
 
   function Field({ label, value, onChange, field, placeholder, rows, mono }: {
-    label: string; value: string; onChange: (v: string) => void; field: string
-    placeholder: string; rows: number; mono?: boolean
+    label: string; value: string; onChange: (v: string) => void; field: string; placeholder: string; rows: number; mono?: boolean
   }) {
     return (
       <div>
@@ -172,7 +158,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
     )
   }
 
-  function AiResultPanel({ acceptField }: { acceptField?: string }) {
+  function AiPanel({ acceptField }: { acceptField?: string }) {
     if (aiOptions && aiOptions.length > 0) return (
       <div className="rounded-xl border border-accent/30 bg-accent/5 overflow-hidden mb-4">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-accent/20">
@@ -182,10 +168,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
         <div className="p-2 space-y-1.5 max-h-80 overflow-y-auto">{aiOptions.map((opt: any, i: number) => (
           <button key={i} onClick={() => selectOption(opt)} className="w-full text-left p-3 rounded-xl border border-cockpit-border bg-cockpit-bg hover:border-accent/40 hover:bg-accent/5 transition-all group">
             <p className="text-sm text-cockpit-text group-hover:text-accent font-medium">{opt.text}</p>
-            {(opt.style || opt.why) && <div className="flex items-center gap-2 mt-1.5">
-              {opt.style && <span className="text-[10px] px-2 py-0.5 rounded-full bg-cockpit-border-light text-cockpit-muted">{opt.style}</span>}
-              {opt.why && <span className="text-[10px] text-cockpit-muted">{opt.why}</span>}
-            </div>}
+            {(opt.style || opt.why) && <div className="flex items-center gap-2 mt-1.5">{opt.style && <span className="text-[10px] px-2 py-0.5 rounded-full bg-cockpit-border-light text-cockpit-muted">{opt.style}</span>}{opt.why && <span className="text-[10px] text-cockpit-muted">{opt.why}</span>}</div>}
           </button>
         ))}</div>
         <RegenBar />
@@ -223,11 +206,16 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
     )
   }
 
-  // ── Duration presets ──────────────────────────────────────────────────
-
-  const durationPresets = content.skill === "LONG_VIDEO"
-    ? [{ l: "8 min", v: 480 }, { l: "10 min", v: 600 }, { l: "15 min", v: 900 }, { l: "20 min", v: 1200 }, { l: "25 min", v: 1500 }, { l: "30 min", v: 1800 }]
-    : [{ l: "30s", v: 30 }, { l: "60s", v: 60 }, { l: "1:30", v: 90 }, { l: "2:00", v: 120 }, { l: "2:30", v: 150 }, { l: "3:00", v: 180 }]
+  // Briefing summary item
+  function BriefItem({ label, value, icon }: { label: string; value: string; icon?: string }) {
+    if (!value) return null
+    return (
+      <div className="p-4 bg-cockpit-bg border border-cockpit-border rounded-xl">
+        <p className="text-[10px] text-cockpit-muted font-medium uppercase tracking-wider mb-1.5">{icon} {label}</p>
+        <p className="text-sm text-cockpit-text whitespace-pre-wrap leading-relaxed">{value}</p>
+      </div>
+    )
+  }
 
   // ── Render ─────────────────────────────────────────────────────────────
 
@@ -256,21 +244,14 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
               <button onClick={onClose} className="p-2 text-cockpit-muted hover:text-cockpit-text rounded-lg hover:bg-cockpit-surface-hover"><X size={16} /></button>
             </div>
           </div>
-
-          {/* Phase stepper — 4 fases */}
-          <div className="flex items-center gap-2">
+          {/* Phase stepper */}
+          <div className="flex items-center gap-2" style={{ scrollbarWidth: "none" }}>
             {PHASES.map((ph, i) => {
-              const isActive = ph.id === content.phase
-              const isPast = i < currentPhaseIdx
-              const Icon = ph.icon
+              const isActive = ph.id === content.phase; const isPast = i < curIdx; const Icon = ph.icon
               return (
                 <button key={ph.id} onClick={() => handlePhaseChange(ph.id)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all border flex-1 justify-center",
-                    isActive ? "bg-accent text-black border-accent" :
-                    isPast ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
-                    "border-cockpit-border text-cockpit-muted hover:border-cockpit-text/30"
-                  )}>
+                  className={cn("flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all border flex-1 justify-center",
+                    isActive ? "bg-accent text-black border-accent" : isPast ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "border-cockpit-border text-cockpit-muted hover:border-cockpit-text/30")}>
                   <Icon size={14} /> {ph.label}
                 </button>
               )
@@ -284,179 +265,142 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
 
             {/* ═══ IDEALIZAÇÃO ═══ */}
             {content.phase === "IDEATION" && (<>
-              {/* Base de referências (dados da ideia original) */}
               {research && (
                 <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 overflow-hidden">
-                  <div className="px-4 py-2.5 border-b border-blue-500/15">
-                    <p className="text-xs font-semibold text-blue-400 flex items-center gap-1.5">📰 Base de referências (pesquisa do agente)</p>
-                  </div>
+                  <div className="px-4 py-2.5 border-b border-blue-500/15"><p className="text-xs font-semibold text-blue-400 flex items-center gap-1.5">📰 Base de referências</p></div>
                   <div className="px-4 py-3 text-sm text-cockpit-text whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{research}</div>
                 </div>
               )}
-
-              {/* Duration */}
               <div>
                 <p className="text-xs font-medium text-cockpit-muted mb-2">Duração estimada</p>
-                <div className="flex flex-wrap gap-2">
-                  {durationPresets.map((p) => (
-                    <button key={p.v} onClick={() => { setTargetDuration(p.v); save({ targetDuration: p.v }) }}
-                      className={cn("px-4 py-2 rounded-xl text-sm font-medium border transition-all",
-                        targetDuration === p.v ? "bg-accent text-black border-accent" : "border-cockpit-border text-cockpit-muted hover:border-accent/30")}>
-                      {p.l}
-                    </button>
-                  ))}
-                </div>
+                <div className="flex flex-wrap gap-2">{durationPresets.map((p) => (
+                  <button key={p.v} onClick={() => { setTargetDuration(p.v); save({ targetDuration: p.v }) }}
+                    className={cn("px-4 py-2 rounded-xl text-sm font-medium border transition-all", targetDuration === p.v ? "bg-accent text-black border-accent" : "border-cockpit-border text-cockpit-muted hover:border-accent/30")}>{p.l}</button>
+                ))}</div>
               </div>
-
-              {/* AI actions */}
               <div className="flex flex-wrap gap-2">
                 <AiBtn action="deep_research" label="Pesquisar mais sobre o tema" />
                 <AiBtn action="generate_hook" label="Gerar hooks" />
-                <AiBtn action="generate_research" label="Sugerir pontos de pesquisa" />
               </div>
-              <AiResultPanel acceptField={aiAction === "generate_research" || aiAction === "deep_research" ? "research" : undefined} />
-
-              {/* Hook */}
-              <Field label="Hook — o gancho dos primeiros segundos" value={hook} onChange={setHook} field="hook" placeholder="O que vai parar o scroll?" rows={3} />
-
-              {/* Research editable */}
-              <Field label="Pesquisa & Referências (editável)" value={research} onChange={setResearch} field="research" placeholder="Links, dados, fontes, inspirações... A IA adicionará dados aqui." rows={6} />
+              <AiPanel acceptField={aiAction === "generate_research" || aiAction === "deep_research" ? "research" : undefined} />
+              <Field label="Hook" value={hook} onChange={setHook} field="hook" placeholder="O gancho dos primeiros segundos..." rows={3} />
+              <Field label="Pesquisa & Referências" value={research} onChange={setResearch} field="research" placeholder="Links, dados, fontes..." rows={6} />
             </>)}
 
             {/* ═══ ELABORAÇÃO ═══ */}
             {content.phase === "ELABORATION" && (<>
-              {/* Section tabs */}
               <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-                {ELABORATION_SECTIONS.map((s) => (
-                  <button key={s} onClick={() => setActiveSection(s)}
-                    className={cn("px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors",
-                      activeSection === s ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
-                    {ELAB_LABEL[s]}
-                  </button>
-                ))}
+                {ELAB_SECTIONS.map((s) => {
+                  const hasContent = s === "hook" ? !!hook : s === "roteiro" ? !!script : s === "titulo" ? true : s === "thumbnail" ? !!thumbnailNotes : !!description
+                  return (
+                    <button key={s} onClick={() => setActiveSection(s)}
+                      className={cn("px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1",
+                        activeSection === s ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
+                      {ELAB_LABEL[s]}
+                      {hasContent && s !== "titulo" && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                    </button>
+                  )
+                })}
               </div>
 
-              {/* Hook */}
               {activeSection === "hook" && (<>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <AiBtn action="generate_hook" label="Gerar hooks com IA" />
-                </div>
-                <AiResultPanel />
+                <div className="flex flex-wrap gap-2"><AiBtn action="generate_hook" label="Gerar hooks com IA" /></div>
+                <AiPanel />
                 <Field label="Hook" value={hook} onChange={setHook} field="hook" placeholder="O gancho dos primeiros segundos..." rows={3} />
               </>)}
 
-              {/* Roteiro */}
               {activeSection === "roteiro" && (<>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <AiBtn action="generate_script" label="Gerar roteiro com IA" />
-                </div>
-                <AiResultPanel acceptField="script" />
+                <div className="flex flex-wrap gap-2"><AiBtn action="generate_script" label="Gerar roteiro com IA" /></div>
+                <AiPanel acceptField="script" />
                 <Field label="Roteiro" value={script} onChange={setScript} field="script" placeholder="Escreva o roteiro completo..." rows={16} mono />
                 {skill && skill.scriptTemplates.length > 0 && !script && (
-                  <div>
-                    <p className="text-[10px] text-cockpit-muted font-medium mb-2">Templates:</p>
-                    <div className="grid grid-cols-2 gap-2">{skill.scriptTemplates.map((t) => (
-                      <button key={t.name} onClick={() => { setScript(t.structure.join("\n\n")); save({ script: t.structure.join("\n\n") }) }}
-                        className="text-left p-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl hover:border-accent/30">
-                        <p className="text-xs font-medium text-cockpit-text">{t.name}</p>
-                        <p className="text-[10px] text-cockpit-muted mt-0.5 line-clamp-2">{t.structure.join(" → ")}</p>
-                      </button>
-                    ))}</div>
-                  </div>
+                  <div><p className="text-[10px] text-cockpit-muted font-medium mb-2">Templates:</p><div className="grid grid-cols-2 gap-2">{skill.scriptTemplates.map((t) => (
+                    <button key={t.name} onClick={() => { setScript(t.structure.join("\n\n")); save({ script: t.structure.join("\n\n") }) }}
+                      className="text-left p-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl hover:border-accent/30">
+                      <p className="text-xs font-medium text-cockpit-text">{t.name}</p><p className="text-[10px] text-cockpit-muted mt-0.5 line-clamp-2">{t.structure.join(" → ")}</p>
+                    </button>
+                  ))}</div></div>
                 )}
               </>)}
 
-              {/* Título */}
               {activeSection === "titulo" && (<>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <AiBtn action="generate_titles" label="Gerar opções de título" />
-                </div>
-                <AiResultPanel />
-                <div>
-                  <p className="text-xs font-medium text-cockpit-muted mb-2">Título</p>
+                <div className="flex flex-wrap gap-2"><AiBtn action="generate_titles" label="Gerar opções de título" /></div>
+                <AiPanel />
+                <div><p className="text-xs font-medium text-cockpit-muted mb-2">Título</p>
                   <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => save({ title })}
-                    className="w-full px-4 py-3 bg-cockpit-bg border border-cockpit-border rounded-xl text-base font-semibold text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30" />
-                </div>
+                    className="w-full px-4 py-3 bg-cockpit-bg border border-cockpit-border rounded-xl text-base font-semibold text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30" /></div>
               </>)}
 
-              {/* Thumbnail */}
               {activeSection === "thumbnail" && (<>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <AiBtn action="generate_thumbnail" label="Gerar conceitos visuais" />
-                </div>
-                <AiResultPanel acceptField="thumbnailNotes" />
-                <Field label="Notas da Thumbnail / Arte" value={thumbnailNotes} onChange={setThumbnailNotes} field="thumbnailNotes" placeholder="Composição, expressão facial, texto overlay, cores..." rows={8} />
+                <div className="flex flex-wrap gap-2"><AiBtn action="generate_thumbnail" label="Gerar conceitos visuais" /></div>
+                <AiPanel acceptField="thumbnailNotes" />
+                <Field label="Notas da Thumbnail" value={thumbnailNotes} onChange={setThumbnailNotes} field="thumbnailNotes" placeholder="Composição, expressão, texto, cores..." rows={8} />
               </>)}
 
-              {/* Descrição */}
               {activeSection === "descricao" && (<>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <AiBtn action="generate_description" label="Gerar descrição e hashtags" />
-                </div>
-                <AiResultPanel acceptField="description" />
-                <Field label="Descrição / Caption" value={description} onChange={setDescription} field="description" placeholder="Descrição para a plataforma, SEO, caption..." rows={8} />
+                <div className="flex flex-wrap gap-2"><AiBtn action="generate_description" label="Gerar descrição e hashtags" /></div>
+                <AiPanel acceptField="description" />
+                <Field label="Descrição / Caption" value={description} onChange={setDescription} field="description" placeholder="Descrição para a plataforma..." rows={8} />
               </>)}
             </>)}
 
-            {/* ═══ ENVIADO P/ EDIÇÃO ═══ */}
-            {content.phase === "EDITING_SENT" && (<>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-xs font-medium text-cockpit-muted mb-2">Link do vídeo bruto (Google Drive)</p>
-                  <input type="url" value={rawVideoUrl} onChange={(e) => setRawVideoUrl(e.target.value)}
-                    onBlur={() => save({ rawVideoUrl: rawVideoUrl || null })}
-                    placeholder="https://drive.google.com/..."
-                    className="w-full px-4 py-3 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30" />
-                  {rawVideoUrl && (
-                    <a href={rawVideoUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-accent hover:underline mt-2">
-                      <ExternalLink size={12} /> Abrir vídeo bruto
-                    </a>
-                  )}
-                </div>
-                <Field label="Notas para o editor" value={notes} onChange={setNotes} field="notes" placeholder="Instruções de corte, efeitos, música, SFX..." rows={6} />
-
-                {/* Preview resumo */}
-                <div className="space-y-2 pt-4 border-t border-cockpit-border">
-                  <p className="text-[10px] text-cockpit-muted font-medium uppercase tracking-wider">Resumo do conteúdo</p>
-                  {hook && <div className="p-3 bg-cockpit-bg border border-cockpit-border rounded-xl"><p className="text-[10px] text-cockpit-muted mb-1">Hook</p><p className="text-sm text-cockpit-text">{hook}</p></div>}
-                  {script && <div className="p-3 bg-cockpit-bg border border-cockpit-border rounded-xl"><p className="text-[10px] text-cockpit-muted mb-1">Roteiro</p><p className="text-xs text-cockpit-muted whitespace-pre-wrap font-mono max-h-32 overflow-y-auto">{script}</p></div>}
-                </div>
+            {/* ═══ BRIEFING (resumo para gravação) ═══ */}
+            {content.phase === "BRIEFING" && (<>
+              <div className="flex items-center gap-2 mb-2">
+                <ClipboardList size={18} className="text-amber-500" />
+                <h2 className="text-sm font-bold text-cockpit-text">Briefing para Gravação</h2>
               </div>
+              <p className="text-xs text-cockpit-muted mb-4">Resumo de tudo que foi elaborado. Use como guia durante a gravação.</p>
+
+              <div className="space-y-3">
+                <BriefItem label="Título" value={title} icon="🎯" />
+                <BriefItem label="Hook — primeiros segundos" value={hook} icon="🎣" />
+
+                {targetDuration > 0 && (
+                  <div className="p-4 bg-cockpit-bg border border-cockpit-border rounded-xl">
+                    <p className="text-[10px] text-cockpit-muted font-medium uppercase tracking-wider mb-1.5">⏱️ Duração alvo</p>
+                    <p className="text-lg font-bold text-accent">{targetDuration >= 60 ? `${Math.floor(targetDuration / 60)} min${targetDuration % 60 > 0 ? ` ${targetDuration % 60}s` : ""}` : `${targetDuration}s`}</p>
+                  </div>
+                )}
+
+                <BriefItem label="Roteiro" value={script} icon="📝" />
+                <BriefItem label="Thumbnail / Arte" value={thumbnailNotes} icon="🖼️" />
+                <BriefItem label="Descrição / Caption" value={description} icon="📋" />
+
+                {research && (
+                  <details className="rounded-xl border border-cockpit-border overflow-hidden">
+                    <summary className="px-4 py-3 text-xs font-medium text-cockpit-muted cursor-pointer hover:bg-cockpit-surface-hover">📚 Pesquisa & Referências (clique para expandir)</summary>
+                    <div className="px-4 py-3 border-t border-cockpit-border text-xs text-cockpit-muted whitespace-pre-wrap max-h-48 overflow-y-auto">{research}</div>
+                  </details>
+                )}
+              </div>
+
+              <Field label="Notas adicionais para gravação" value={notes} onChange={setNotes} field="notes" placeholder="Ângulos de câmera, cenário, figurino, props..." rows={4} />
+            </>)}
+
+            {/* ═══ EM EDIÇÃO ═══ */}
+            {content.phase === "EDITING_SENT" && (<>
+              <div>
+                <p className="text-xs font-medium text-cockpit-muted mb-2">Link do vídeo bruto (Google Drive)</p>
+                <input type="url" value={rawVideoUrl} onChange={(e) => setRawVideoUrl(e.target.value)}
+                  onBlur={() => save({ rawVideoUrl: rawVideoUrl || null })} placeholder="https://drive.google.com/..."
+                  className="w-full px-4 py-3 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30" />
+                {rawVideoUrl && <a href={rawVideoUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-accent hover:underline mt-2"><ExternalLink size={12} /> Abrir vídeo bruto</a>}
+              </div>
+              <Field label="Notas para o editor" value={notes} onChange={setNotes} field="notes" placeholder="Cortes, efeitos, música, SFX, timing..." rows={6} />
             </>)}
 
             {/* ═══ PUBLICADO ═══ */}
             {content.phase === "PUBLISHED" && (<>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-xs font-medium text-cockpit-muted mb-2">Link publicado</p>
-                  <input type="url" value={content.publishedUrl ?? ""} onChange={(e) => save({ publishedUrl: e.target.value || null })}
-                    placeholder="https://youtube.com/watch?v=..."
-                    className="w-full px-4 py-3 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30" />
-                  {content.publishedUrl && (
-                    <a href={content.publishedUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-accent hover:underline mt-2">
-                      <ExternalLink size={12} /> Abrir conteúdo publicado
-                    </a>
-                  )}
-                </div>
-
-                {/* Performance / análise */}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <AiBtn action="review" label="Analisar performance com IA" />
-                </div>
-                <AiResultPanel />
-
-                <Field label="Métricas & Análise" value={notes} onChange={setNotes} field="notes" placeholder="Views, CTR, retenção, lições aprendidas..." rows={6} />
-
-                {/* Content summary */}
-                <div className="space-y-2 pt-4 border-t border-cockpit-border">
-                  <p className="text-[10px] text-cockpit-muted font-medium uppercase tracking-wider">Conteúdo produzido</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {hook && <div className="p-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl"><p className="text-[9px] text-cockpit-muted">Hook</p><p className="text-xs text-cockpit-text mt-0.5">{hook}</p></div>}
-                    {title && <div className="p-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl"><p className="text-[9px] text-cockpit-muted">Título</p><p className="text-xs font-semibold text-cockpit-text mt-0.5">{title}</p></div>}
-                  </div>
-                  {description && <div className="p-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl"><p className="text-[9px] text-cockpit-muted">Descrição</p><p className="text-xs text-cockpit-muted mt-0.5 line-clamp-3">{description}</p></div>}
-                </div>
+              <div>
+                <p className="text-xs font-medium text-cockpit-muted mb-2">Link publicado</p>
+                <input type="url" value={content.publishedUrl ?? ""} onChange={(e) => save({ publishedUrl: e.target.value || null })}
+                  placeholder="https://youtube.com/watch?v=..." className="w-full px-4 py-3 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30" />
+                {content.publishedUrl && <a href={content.publishedUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-accent hover:underline mt-2"><ExternalLink size={12} /> Abrir</a>}
               </div>
+              <div className="flex flex-wrap gap-2"><AiBtn action="review" label="Analisar performance com IA" /></div>
+              <AiPanel />
+              <Field label="Métricas & Lições" value={notes} onChange={setNotes} field="notes" placeholder="Views, CTR, retenção, o que funcionou..." rows={6} />
             </>)}
 
           </div>
@@ -465,22 +409,16 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
           <div className="hidden lg:flex w-72 flex-shrink-0 border-l border-cockpit-border flex-col overflow-y-auto">
             <div className="px-4 py-5 space-y-5">
               {areas.length > 0 && (
-                <div>
-                  <p className="text-[10px] text-cockpit-muted font-medium uppercase tracking-wider mb-2">Áreas</p>
+                <div><p className="text-[10px] text-cockpit-muted font-medium uppercase tracking-wider mb-2">Áreas</p>
                   <div className="flex flex-wrap gap-1.5">{areas.map((a) => (
-                    <button key={a.id} onClick={() => handleToggleArea(a.id)} className={cn(
-                      "flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all",
-                      localAreaIds.includes(a.id) ? "border-transparent text-white" : "border-cockpit-border text-cockpit-muted"
-                    )} style={localAreaIds.includes(a.id) ? { backgroundColor: a.color } : undefined}>{a.icon} {a.name}</button>
-                  ))}</div>
-                </div>
+                    <button key={a.id} onClick={() => handleToggleArea(a.id)} className={cn("flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all", localAreaIds.includes(a.id) ? "border-transparent text-white" : "border-cockpit-border text-cockpit-muted")} style={localAreaIds.includes(a.id) ? { backgroundColor: a.color } : undefined}>{a.icon} {a.name}</button>
+                  ))}</div></div>
               )}
-              <div>
-                <p className="text-[10px] text-cockpit-muted font-medium uppercase tracking-wider mb-2">Anotações</p>
-                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => save({ notes: notes || null })}
-                  placeholder="Notas livres..." rows={4}
-                  className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-xs text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30 resize-none" />
-              </div>
+              {content.phase !== "BRIEFING" && (
+                <div><p className="text-[10px] text-cockpit-muted font-medium uppercase tracking-wider mb-2">Anotações</p>
+                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => save({ notes: notes || null })} placeholder="Notas livres..." rows={4}
+                    className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-xs text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30 resize-none" /></div>
+              )}
             </div>
           </div>
         </div>
@@ -488,9 +426,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
         {/* Footer */}
         <div className="px-6 py-3 border-t border-cockpit-border bg-cockpit-bg/50 flex items-center justify-between flex-shrink-0">
           {prevPhase ? (
-            <button onClick={() => handlePhaseChange(prevPhase.id)} className="flex items-center gap-1 px-3 py-2 text-xs text-cockpit-muted hover:text-cockpit-text border border-cockpit-border rounded-xl">
-              <ChevronLeft size={13} /> {prevPhase.label}
-            </button>
+            <button onClick={() => handlePhaseChange(prevPhase.id)} className="flex items-center gap-1 px-3 py-2 text-xs text-cockpit-muted hover:text-cockpit-text border border-cockpit-border rounded-xl"><ChevronLeft size={13} /> {prevPhase.label}</button>
           ) : <div />}
           <div className="flex items-center gap-2">
             {isPending && <Loader2 size={14} className="animate-spin text-cockpit-muted" />}
@@ -498,9 +434,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
           </div>
           {nextPhase ? (
             <button onClick={() => handlePhaseChange(nextPhase.id)}
-              className="flex items-center gap-1 px-4 py-2 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover">
-              {nextPhase.label} <ChevronRight size={13} />
-            </button>
+              className="flex items-center gap-1 px-4 py-2 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover">{nextPhase.label} <ChevronRight size={13} /></button>
           ) : <div />}
         </div>
       </div>

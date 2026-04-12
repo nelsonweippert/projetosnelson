@@ -282,6 +282,7 @@ enum ContentFormat {
 enum ContentPhase {
   IDEATION
   ELABORATION
+  BRIEFING
   EDITING_SENT
   PUBLISHED
   ARCHIVED
