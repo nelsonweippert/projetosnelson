@@ -8,8 +8,9 @@ import {
   ExternalLink, Link, Trash2, Send, FileText, ChevronDown, ChevronUp,
 } from "lucide-react"
 import { cn, formatDate } from "@/lib/utils"
-import { createContentAction, archiveContentAction } from "@/app/actions/content.actions"
+import { createContentAction, archiveContentAction, advanceContentPhaseAction } from "@/app/actions/content.actions"
 import { getSkillSourcesAction, addSkillSourceAction, deleteSkillSourceAction } from "@/app/actions/skill.actions"
+import { getMonitorTermsAction, addMonitorTermAction, deleteMonitorTermAction, getIdeasAction, discardIdeaAction, markIdeaUsedAction, generateIdeasNowAction } from "@/app/actions/idea.actions"
 import { CONTENT_SKILLS, SKILL_LIST, type SkillId } from "@/config/content-skills"
 import type { Area, ContentPhase, Platform, ContentFormat } from "@/types"
 import { DatePicker } from "@/components/ui/DatePicker"
@@ -53,13 +54,11 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   const [selectedSkill, setSelectedSkill] = useState<SkillId | null>(null)
   const [newTitle, setNewTitle] = useState("")
   const [newHook, setNewHook] = useState("")
-  const [newSeries, setNewSeries] = useState("")
+  // series removed
   const [newPlannedDate, setNewPlannedDate] = useState("")
   const [newAreaIds, setNewAreaIds] = useState<string[]>([])
   const [newPlatform, setNewPlatform] = useState<Platform>("YOUTUBE")
   const [newFormat, setNewFormat] = useState<ContentFormat>("LONG_VIDEO")
-  const [seriesAiLoading, setSeriesAiLoading] = useState(false)
-  const [seriesOptions, setSeriesOptions] = useState<any[] | null>(null)
 
   // Filters
   const [search, setSearch] = useState("")
@@ -67,6 +66,64 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   const [phaseFilters, setPhaseFilters] = useState<ContentPhase[]>([])
   const [areaFilters, setAreaFilters] = useState<string[]>([])
   const [showFilters, setShowFilters] = useState(false)
+
+  // Idea repository
+  const [monitorTerms, setMonitorTerms] = useState<any[]>([])
+  const [ideaFeed, setIdeaFeed] = useState<any[]>([])
+  const [ideasLoaded, setIdeasLoaded] = useState(false)
+  const [newTerm, setNewTerm] = useState("")
+  const [generatingIdeas, setGeneratingIdeas] = useState(false)
+  const [ideaSkillPick, setIdeaSkillPick] = useState<{ idea: any; picking: boolean } | null>(null)
+
+  async function loadIdeas() {
+    if (ideasLoaded) return
+    const [termsRes, ideasRes] = await Promise.all([getMonitorTermsAction(), getIdeasAction()])
+    if (termsRes.success) setMonitorTerms(termsRes.data as any[])
+    if (ideasRes.success) setIdeaFeed(ideasRes.data as any[])
+    setIdeasLoaded(true)
+  }
+
+  async function handleAddTerm() {
+    if (!newTerm.trim()) return
+    const res = await addMonitorTermAction(newTerm.trim())
+    if (res.success) { setMonitorTerms((p) => [res.data as any, ...p]); setNewTerm("") }
+  }
+
+  async function handleDeleteTerm(id: string) {
+    await deleteMonitorTermAction(id)
+    setMonitorTerms((p) => p.filter((t) => t.id !== id))
+  }
+
+  async function handleGenerateIdeas() {
+    setGeneratingIdeas(true)
+    const res = await generateIdeasNowAction()
+    if (res.success) { setIdeasLoaded(false); await loadIdeas() }
+    setGeneratingIdeas(false)
+  }
+
+  async function handleDiscardIdea(id: string) {
+    await discardIdeaAction(id)
+    setIdeaFeed((p) => p.filter((i) => i.id !== id))
+  }
+
+  async function handleCreateFromIdea(idea: any, skillId: SkillId) {
+    const platform = skillId === "SHORT_VIDEO" ? "TIKTOK" : skillId === "LONG_VIDEO" ? "YOUTUBE" : "INSTAGRAM"
+    const format = skillId === "SHORT_VIDEO" ? "SHORT" : skillId === "LONG_VIDEO" ? "LONG_VIDEO" : "POST"
+    startTransition(async () => {
+      const result = await createContentAction({
+        title: idea.title, hook: idea.hook || undefined, platform, format,
+        skill: skillId, areaIds: [],
+      })
+      if (result.success) {
+        setContents((prev) => [result.data as Content, ...prev])
+        await markIdeaUsedAction(idea.id)
+        setIdeaFeed((p) => p.filter((i) => i.id !== idea.id))
+        setIdeaSkillPick(null)
+        // Go directly to elaboration
+        await advanceContentPhaseAction((result.data as any).id, "ELABORATION")
+      }
+    })
+  }
 
   // Skill contributions
   const [expandedSkill, setExpandedSkill] = useState<SkillId | null>(null)
@@ -124,7 +181,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
 
   function resetCreate() {
     setShowCreate(false); setCreateStep("skill"); setSelectedSkill(null)
-    setNewTitle(""); setNewHook(""); setNewSeries(""); setNewPlannedDate(""); setNewAreaIds([]); setNewPlatform("YOUTUBE"); setNewFormat("LONG_VIDEO")
+    setNewTitle(""); setNewHook(""); setNewPlannedDate(""); setNewAreaIds([]); setNewPlatform("YOUTUBE"); setNewFormat("LONG_VIDEO")
   }
 
   function selectSkill(skill: SkillId) {
@@ -140,7 +197,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
     startTransition(async () => {
       const result = await createContentAction({
         title: newTitle, platform: newPlatform, format: newFormat,
-        skill: selectedSkill, hook: newHook || undefined, series: newSeries || undefined,
+        skill: selectedSkill, hook: newHook || undefined,
         plannedDate: newPlannedDate ? new Date(newPlannedDate) : null, areaIds: newAreaIds,
       })
       if (result.success) { setContents((prev) => [result.data as Content, ...prev]); resetCreate() }
@@ -190,33 +247,6 @@ export function ConteudoClient({ initialContents, areas }: Props) {
     })
   }
 
-  async function handleGenerateSeries() {
-    if (!newTitle.trim() || !selectedSkill) return
-    setSeriesAiLoading(true); setSeriesOptions(null)
-    try {
-      const res = await fetch("/api/content/ai", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generate_series", skill: selectedSkill, title: newTitle, series: newSeries }),
-      })
-      if (res.ok) { const data = await res.json(); setSeriesOptions(data.options ?? []) }
-    } catch {}
-    setSeriesAiLoading(false)
-  }
-
-  async function createFromSeriesOption(opt: { title: string; hook: string }) {
-    if (!selectedSkill) return
-    startTransition(async () => {
-      const result = await createContentAction({
-        title: opt.title, hook: opt.hook, platform: newPlatform, format: newFormat,
-        skill: selectedSkill, series: newSeries || newTitle, areaIds: newAreaIds,
-      })
-      if (result.success) {
-        setContents((prev) => [result.data as Content, ...prev])
-        setSeriesOptions((prev) => prev?.filter((o) => o.title !== opt.title) ?? null)
-      }
-    })
-  }
-
   // ── Render card ─────────────────────────────────────────────────────────
 
   function renderCard(c: Content) {
@@ -230,7 +260,6 @@ export function ConteudoClient({ initialContents, areas }: Props) {
             <p className="text-sm font-medium text-cockpit-text truncate group-hover:text-accent transition-colors">{c.title}</p>
             <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
               <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full border", PHASE_COLOR[c.phase] || "")}>{PHASE_LABEL[c.phase] || c.phase}</span>
-              {c.series && <span className="text-[10px] text-cockpit-muted">📂 {c.series}</span>}
               {c.plannedDate && <span className="text-[10px] text-cockpit-muted">{formatDate(c.plannedDate)}</span>}
               {cAreas.slice(0, 2).map((a: any) => (
                 <span key={a.id} className="text-[10px] px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: a.color }}>{a.icon}</span>
@@ -332,7 +361,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
           {([
             { key: "overview" as Tab, label: "Visão Geral", icon: BarChart3 },
             { key: "pipeline" as Tab, label: "Pipeline", icon: Workflow },
-            { key: "ideas" as Tab, label: "Banco de Ideias", icon: Lightbulb },
+            { key: "ideas" as Tab, label: "Repositório de Ideias", icon: Lightbulb },
             { key: "skills" as Tab, label: "Skills & Boas Práticas", icon: BookOpen },
           ]).map(({ key, label, icon: Icon }) => (
             <button key={key} onClick={() => setTab(key)} className={cn(
@@ -365,8 +394,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
             {createStep === "details" && selectedSkill && (
               <div className="space-y-4">
                 <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Ideia do conteúdo *  (ex: Como ganhar dinheiro com IA em 2026)" className="w-full px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30" autoFocus />
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div><label className="block text-xs text-cockpit-muted mb-1.5">Série (opcional)</label><input type="text" value={newSeries} onChange={(e) => setNewSeries(e.target.value)} placeholder="Ex: Dicas semanais" className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30" /></div>
+                <div className="grid grid-cols-2 gap-3">
                   <div><label className="block text-xs text-cockpit-muted mb-1.5">Data planejada</label><DatePicker value={newPlannedDate} onChange={setNewPlannedDate} /></div>
                   <div><label className="block text-xs text-cockpit-muted mb-1.5">Plataforma</label><select value={newPlatform} onChange={(e) => setNewPlatform(e.target.value as Platform)} className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30"><option value="YOUTUBE">YouTube</option><option value="INSTAGRAM">Instagram</option><option value="TIKTOK">TikTok</option><option value="TWITCH">Twitch</option><option value="OTHER">Outro</option></select></div>
                 </div>
@@ -379,35 +407,6 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                     <ul className="space-y-1">{CONTENT_SKILLS[selectedSkill].phases[0].tips.slice(0, 3).map((tip, i) => (<li key={i} className="text-[11px] text-cockpit-text">{tip}</li>))}</ul>
                   </div>
                 )}
-                {/* AI Series generator */}
-                {newTitle.trim() && (
-                  <div className="space-y-3">
-                    <button onClick={handleGenerateSeries} disabled={seriesAiLoading}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent/10 text-accent text-xs font-semibold border border-accent/20 rounded-xl hover:bg-accent/20 transition-colors disabled:opacity-50">
-                      {seriesAiLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Gerar ideias de série com IA
-                    </button>
-                    {seriesOptions && seriesOptions.length > 0 && (
-                      <div className="rounded-xl border border-accent/30 bg-accent/5 overflow-hidden">
-                        <div className="flex items-center justify-between px-4 py-2.5 border-b border-accent/20">
-                          <p className="text-[11px] font-semibold text-accent flex items-center gap-1"><Sparkles size={12} /> Série gerada — clique para criar</p>
-                          <button onClick={() => setSeriesOptions(null)} className="text-cockpit-muted hover:text-cockpit-text"><X size={13} /></button>
-                        </div>
-                        <div className="p-2 space-y-1.5 max-h-64 overflow-y-auto">
-                          {seriesOptions.map((opt: any, i: number) => (
-                            <button key={i} onClick={() => createFromSeriesOption(opt)} disabled={isPending}
-                              className="w-full text-left p-3 rounded-xl border border-cockpit-border bg-cockpit-bg hover:border-accent/40 hover:bg-accent/5 transition-all group disabled:opacity-50">
-                              <p className="text-sm text-cockpit-text group-hover:text-accent font-medium">{opt.title}</p>
-                              {opt.hook && <p className="text-xs text-cockpit-muted mt-1 italic">"{opt.hook}"</p>}
-                              {opt.angle && <p className="text-[10px] text-cockpit-muted mt-1">{opt.angle}</p>}
-                              <p className="text-[9px] text-accent mt-1.5 opacity-0 group-hover:opacity-100">Clique para criar este conteúdo</p>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 <div className="flex justify-end gap-2">
                   <button onClick={() => setCreateStep("skill")} className="px-4 py-2 text-sm text-cockpit-muted hover:text-cockpit-text border border-cockpit-border rounded-xl">Voltar</button>
                   <button onClick={handleCreate} disabled={!newTitle.trim() || isPending} className="flex items-center gap-2 px-4 py-2 bg-accent text-black text-sm font-semibold rounded-xl hover:bg-accent-hover disabled:opacity-50">
@@ -495,20 +494,6 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                 </div>
               )}
 
-              {/* Series */}
-              {Object.keys(counts.series).length > 0 && (
-                <div className="cockpit-card !p-0 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-cockpit-border">
-                    <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider flex items-center gap-1.5">📂 Séries</h3>
-                  </div>
-                  <div className="divide-y divide-cockpit-border">{Object.entries(counts.series).sort(([, a], [, b]) => b - a).slice(0, 8).map(([name, count]) => (
-                    <div key={name} onClick={() => { setSearch(name); setTab("pipeline"); setViewMode("list") }} className="flex items-center justify-between px-4 py-3 hover:bg-cockpit-surface-hover cursor-pointer transition-colors">
-                      <p className="text-sm text-cockpit-text">{name}</p>
-                      <span className="text-xs text-cockpit-muted bg-cockpit-border-light px-2 py-0.5 rounded-full">{count} peça{count !== 1 ? "s" : ""}</span>
-                    </div>
-                  ))}</div>
-                </div>
-              )}
             </div>
 
             {/* Empty state */}
@@ -564,44 +549,96 @@ export function ConteudoClient({ initialContents, areas }: Props) {
           </div>
         )}
 
-        {/* ═══ TAB: BANCO DE IDEIAS ═══ */}
+        {/* ═══ TAB: REPOSITÓRIO DE IDEIAS ═══ */}
+        {tab === "ideas" && (() => { if (!ideasLoaded) loadIdeas(); return null; })()}
         {tab === "ideas" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-cockpit-muted">{ideas.length} ideia{ideas.length !== 1 ? "s" : ""} no banco</p>
-              <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 px-3 py-2 bg-accent/10 text-accent text-xs font-semibold border border-accent/20 rounded-xl hover:bg-accent/20">
-                <Lightbulb size={13} /> Nova ideia
-              </button>
+          <div className="space-y-5">
+            {/* Monitor terms */}
+            <div className="cockpit-card">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider">Termos monitorados</h3>
+                <button onClick={handleGenerateIdeas} disabled={generatingIdeas || monitorTerms.filter((t) => t.isActive).length === 0}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-accent/10 text-accent text-xs font-semibold border border-accent/20 rounded-xl hover:bg-accent/20 disabled:opacity-50">
+                  {generatingIdeas ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Gerar ideias agora
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {monitorTerms.map((t: any) => (
+                  <span key={t.id} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border", t.isActive ? "border-accent/30 bg-accent/10 text-accent" : "border-cockpit-border text-cockpit-muted line-through")}>
+                    {t.term}
+                    <button onClick={() => handleDeleteTerm(t.id)} className="text-cockpit-muted hover:text-red-400"><X size={11} /></button>
+                  </span>
+                ))}
+                {monitorTerms.length === 0 && <p className="text-xs text-cockpit-muted">Nenhum termo. Adicione temas para monitorar.</p>}
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="text" value={newTerm} onChange={(e) => setNewTerm(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddTerm() }}
+                  placeholder="Ex: inteligência artificial, crypto, produtividade..."
+                  className="flex-1 px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
+                <button onClick={handleAddTerm} disabled={!newTerm.trim()}
+                  className="px-3 py-2 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover disabled:opacity-50">
+                  <Plus size={14} />
+                </button>
+              </div>
+              <p className="text-[10px] text-cockpit-muted mt-2">O sistema busca tendências diariamente às 8h com base nesses termos.</p>
             </div>
 
-            {ideas.length === 0 ? (
+            {/* Ideas feed */}
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-cockpit-muted">{ideaFeed.filter((i) => !i.isUsed).length} ideias disponíveis</p>
+            </div>
+
+            {ideaFeed.length === 0 ? (
               <div className="cockpit-card flex flex-col items-center justify-center py-16 text-cockpit-muted">
                 <Lightbulb size={32} strokeWidth={1} />
-                <p className="text-sm mt-3">Nenhuma ideia registrada</p>
-                <p className="text-xs mt-1">Crie conteúdos na fase "Ideia" para vê-los aqui</p>
+                <p className="text-sm mt-3">Nenhuma ideia ainda</p>
+                <p className="text-xs mt-1">Adicione termos e clique "Gerar ideias agora"</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {ideas.map((c: Content) => {
-                  const cAreas = c.areas?.map((a: any) => a.area).filter(Boolean) ?? (c.area ? [c.area] : [])
-                  return (
-                    <div key={c.id} onClick={() => setSelectedContent(c)}
-                      className="cockpit-card cursor-pointer hover:border-accent/30 transition-colors group">
-                      <div className="flex items-start gap-2 mb-2">
-                        {c.skill && <span className="text-lg">{SKILL_ICON[c.skill]}</span>}
-                        <p className="text-sm font-medium text-cockpit-text group-hover:text-accent transition-colors flex-1">{c.title}</p>
-                      </div>
-                      {c.hook && <p className="text-xs text-cockpit-muted mb-2 italic line-clamp-2">"{c.hook}"</p>}
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {c.skill && <span className="text-[10px] text-cockpit-muted">{CONTENT_SKILLS[c.skill as SkillId]?.label}</span>}
-                        {c.series && <span className="text-[10px] text-cockpit-muted">📂 {c.series}</span>}
-                        {cAreas.map((a: any) => (
-                          <span key={a.id} className="text-[10px] px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: a.color }}>{a.icon}</span>
-                        ))}
+              <div className="space-y-2">
+                {ideaFeed.filter((i) => !i.isUsed).map((idea: any) => (
+                  <div key={idea.id} className="cockpit-card !p-0 group hover:border-accent/30 transition-colors">
+                    <div className="px-5 py-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-cockpit-text">{idea.title}</p>
+                          <p className="text-xs text-cockpit-muted mt-1 line-clamp-2">{idea.summary}</p>
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            {idea.term && <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent">{idea.term}</span>}
+                            {idea.angle && <span className="text-[10px] text-cockpit-muted">💡 {idea.angle}</span>}
+                            {idea.relevance && <span className="text-[10px] text-cockpit-muted">📈 {idea.relevance}</span>}
+                          </div>
+                          {idea.hook && <p className="text-xs text-cockpit-muted mt-2 italic border-l-2 border-accent/30 pl-2">Hook: "{idea.hook}"</p>}
+                        </div>
+                        <div className="flex flex-col gap-1.5 flex-shrink-0">
+                          {ideaSkillPick?.idea?.id === idea.id ? (
+                            <div className="flex flex-col gap-1">
+                              {SKILL_LIST.map((s) => (
+                                <button key={s.id} onClick={() => handleCreateFromIdea(idea, s.id)} disabled={isPending}
+                                  className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium rounded-lg border border-cockpit-border text-cockpit-text hover:border-accent/40 hover:bg-accent/5 disabled:opacity-50">
+                                  {s.icon} {s.label}
+                                </button>
+                              ))}
+                              <button onClick={() => setIdeaSkillPick(null)} className="text-[10px] text-cockpit-muted hover:text-cockpit-text mt-0.5">Cancelar</button>
+                            </div>
+                          ) : (
+                            <>
+                              <button onClick={() => setIdeaSkillPick({ idea, picking: true })}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-accent text-black text-[11px] font-semibold rounded-lg hover:bg-accent-hover">
+                                <Plus size={12} /> Criar
+                              </button>
+                              <button onClick={() => handleDiscardIdea(idea.id)}
+                                className="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-3 py-1.5 text-[11px] text-cockpit-muted hover:text-red-400 rounded-lg border border-cockpit-border hover:border-red-400/30">
+                                <Trash2 size={11} /> Descartar
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  )
-                })}
+                  </div>
+                ))}
               </div>
             )}
           </div>

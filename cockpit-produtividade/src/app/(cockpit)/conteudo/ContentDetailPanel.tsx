@@ -241,7 +241,6 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
                   className="w-full text-lg font-bold text-cockpit-text bg-transparent border-b border-transparent hover:border-cockpit-border focus:border-accent focus:outline-none py-0.5" />
                 <div className="flex items-center gap-2 mt-1">
                   {skill && <span className="text-[11px] text-cockpit-muted">{skill.label}</span>}
-                  {content.series && <span className="text-[11px] text-cockpit-muted">· 📂 {content.series}</span>}
                   {targetDuration > 0 && <span className="text-[11px] text-cockpit-muted">· {targetDuration >= 60 ? `${Math.floor(targetDuration / 60)}min` : `${targetDuration}s`}</span>}
                 </div>
               </div>

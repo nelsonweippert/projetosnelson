@@ -28,6 +28,8 @@ model User {
   aiInsights     AiInsight[]
   calendarEvents CalendarEvent[]
   skillSources   SkillSource[]
+  monitorTerms   MonitorTerm[]
+  ideaFeed       IdeaFeed[]
 
   @@map("users")
 }
@@ -302,7 +304,7 @@ model Content {
   targetDuration Int?
   hook           String?
   script         String?
-  series         String?
+  ideaFeedId     String?
   tags           String[]
   thumbnailNotes String?
   research       String?
@@ -398,6 +400,44 @@ model CalendarEventArea {
 
   @@id([calendarEventId, areaId])
   @@map("calendar_event_areas")
+}
+
+// ========================================
+// Repositório de Ideias — Monitoramento e Feed
+// ========================================
+
+model MonitorTerm {
+  id        String   @id @default(cuid())
+  term      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("monitor_terms")
+}
+
+model IdeaFeed {
+  id          String   @id @default(cuid())
+  title       String
+  summary     String
+  angle       String?
+  source      String?
+  relevance   String?
+  hook        String?
+  term        String
+  isUsed      Boolean  @default(false)
+  isDiscarded Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, isUsed, isDiscarded])
+  @@map("idea_feed")
 }
 
 // ========================================
