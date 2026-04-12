@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import {
   Plus, Video, Archive, X, Loader2, Sparkles,
   Search, SlidersHorizontal, LayoutGrid, List, Lightbulb,
@@ -75,13 +75,15 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   const [generatingIdeas, setGeneratingIdeas] = useState(false)
   const [ideaSkillPick, setIdeaSkillPick] = useState<{ idea: any; picking: boolean } | null>(null)
 
-  async function loadIdeas() {
-    if (ideasLoaded) return
-    const [termsRes, ideasRes] = await Promise.all([getMonitorTermsAction(), getIdeasAction()])
-    if (termsRes.success) setMonitorTerms(termsRes.data as any[])
-    if (ideasRes.success) setIdeaFeed(ideasRes.data as any[])
-    setIdeasLoaded(true)
-  }
+  useEffect(() => {
+    if (tab === "ideas" && !ideasLoaded) {
+      Promise.all([getMonitorTermsAction(), getIdeasAction()]).then(([termsRes, ideasRes]) => {
+        if (termsRes.success) setMonitorTerms(termsRes.data as any[])
+        if (ideasRes.success) setIdeaFeed(ideasRes.data as any[])
+        setIdeasLoaded(true)
+      })
+    }
+  }, [tab, ideasLoaded])
 
   async function handleAddTerm() {
     if (!newTerm.trim()) return
@@ -97,7 +99,10 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   async function handleGenerateIdeas() {
     setGeneratingIdeas(true)
     const res = await generateIdeasNowAction()
-    if (res.success) { setIdeasLoaded(false); await loadIdeas() }
+    // Always reload ideas after generation attempt
+    const ideasRes = await getIdeasAction()
+    if (ideasRes.success) setIdeaFeed(ideasRes.data as any[])
+    if (!res.success) console.error("Erro ao gerar ideias:", res.error)
     setGeneratingIdeas(false)
   }
 
@@ -550,7 +555,6 @@ export function ConteudoClient({ initialContents, areas }: Props) {
         )}
 
         {/* ═══ TAB: REPOSITÓRIO DE IDEIAS ═══ */}
-        {tab === "ideas" && (() => { if (!ideasLoaded) loadIdeas(); return null; })()}
         {tab === "ideas" && (
           <div className="space-y-5">
             {/* Monitor terms */}
