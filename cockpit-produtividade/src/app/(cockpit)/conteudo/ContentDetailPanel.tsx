@@ -103,8 +103,32 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
       })
       if (res.ok) {
         const data = await res.json()
-        if (data.type === "options" && data.options) { setAiOptions(data.options); setAiField(data.field) }
-        else setAiResult(data.result)
+        if (data.type === "options" && data.options) {
+          setAiOptions(data.options); setAiField(data.field)
+        } else {
+          const result = data.result
+          setAiResult(result)
+          // Auto-save text results to the corresponding field
+          const autoSaveMap: Record<string, [string, (v: string) => void, string]> = {
+            generate_script: ["script", setScript, "script"],
+            generate_description: ["description", setDescription, "description"],
+            generate_thumbnail: ["thumbnailNotes", setThumbnailNotes, "thumbnailNotes"],
+            generate_editing_notes: ["notes", setNotes, "notes"],
+          }
+          const mapping = autoSaveMap[action]
+          if (mapping) {
+            const [dbField, setter] = mapping
+            setter(result)
+            save({ [dbField]: result })
+          } else if (action === "deep_research" || action === "generate_research") {
+            if (research.trim()) {
+              const combined = `${research}\n\n---\n\n${result}`
+              setResearch(combined); save({ research: combined })
+            } else {
+              setResearch(result); save({ research: result })
+            }
+          }
+        }
       } else setAiResult("Erro. Verifique a ANTHROPIC_API_KEY.")
     } catch { setAiResult("Erro de conexão.") }
     setAiLoading(null); setAiConsideration("")
