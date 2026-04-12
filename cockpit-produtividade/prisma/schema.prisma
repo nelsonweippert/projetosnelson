@@ -278,16 +278,9 @@ enum ContentFormat {
 }
 
 enum ContentPhase {
-  IDEA
-  RESEARCH
-  SCRIPT
-  TITLE
-  THUMBNAIL
-  DESCRIPTION
-  RECORDING
-  EDITING
-  REVIEW
-  SCHEDULED
+  IDEATION
+  ELABORATION
+  EDITING_SENT
   PUBLISHED
   ARCHIVED
 }
@@ -303,7 +296,8 @@ model Content {
   title          String
   platform       Platform      @default(YOUTUBE)
   format         ContentFormat @default(LONG_VIDEO)
-  phase          ContentPhase  @default(IDEA)
+  phase          ContentPhase  @default(IDEATION)
+  rawVideoUrl    String?
   skill          ContentSkill?
   targetDuration Int?
   hook           String?

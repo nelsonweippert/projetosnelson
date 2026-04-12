@@ -4,7 +4,7 @@ import { useCallback, useState, useTransition } from "react"
 import {
   X, Loader2, Archive, ChevronRight, ChevronLeft,
   Lightbulb, FileText, ExternalLink, Sparkles, RefreshCw,
-  Type, Image, Hash, Mic, Scissors, CheckCircle, Calendar, Send,
+  Scissors, Send, PenTool,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { updateContentAction, advanceContentPhaseAction, archiveContentAction } from "@/app/actions/content.actions"
@@ -14,24 +14,17 @@ import type { Area, ContentPhase } from "@/types"
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Content = any
 
-const PHASE_ORDER: ContentPhase[] = [
-  "IDEA", "RESEARCH", "SCRIPT", "TITLE", "THUMBNAIL", "DESCRIPTION",
-  "RECORDING", "EDITING", "REVIEW", "SCHEDULED", "PUBLISHED",
+const PHASES: { id: ContentPhase; label: string; icon: React.ElementType; color: string }[] = [
+  { id: "IDEATION", label: "Idealização", icon: Lightbulb, color: "text-violet-500" },
+  { id: "ELABORATION", label: "Elaboração", icon: PenTool, color: "text-amber-500" },
+  { id: "EDITING_SENT", label: "Enviado p/ Edição", icon: Scissors, color: "text-pink-500" },
+  { id: "PUBLISHED", label: "Publicado", icon: Send, color: "text-accent" },
 ]
 
-const PHASE_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  IDEA: { label: "Ideação", icon: Lightbulb, color: "text-violet-500" },
-  RESEARCH: { label: "Pesquisa", icon: FileText, color: "text-blue-500" },
-  SCRIPT: { label: "Roteiro", icon: FileText, color: "text-amber-500" },
-  TITLE: { label: "Título", icon: Type, color: "text-orange-500" },
-  THUMBNAIL: { label: "Thumbnail", icon: Image, color: "text-pink-500" },
-  DESCRIPTION: { label: "Descrição", icon: Hash, color: "text-cyan-500" },
-  RECORDING: { label: "Gravação", icon: Mic, color: "text-red-500" },
-  EDITING: { label: "Edição", icon: Scissors, color: "text-pink-500" },
-  REVIEW: { label: "Revisão", icon: CheckCircle, color: "text-emerald-500" },
-  SCHEDULED: { label: "Agendado", icon: Calendar, color: "text-emerald-500" },
-  PUBLISHED: { label: "Publicado", icon: Send, color: "text-accent" },
-}
+// Sub-sections dentro de Elaboração
+const ELABORATION_SECTIONS = ["hook", "roteiro", "titulo", "thumbnail", "descricao"] as const
+type ElabSection = typeof ELABORATION_SECTIONS[number]
+const ELAB_LABEL: Record<ElabSection, string> = { hook: "Hook", roteiro: "Roteiro", titulo: "Título", thumbnail: "Thumbnail", descricao: "Descrição & Hashtags" }
 
 interface Props {
   content: Content
@@ -44,8 +37,6 @@ interface Props {
 export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchive }: Props) {
   const [isPending, startTransition] = useTransition()
   const skill = content.skill ? CONTENT_SKILLS[content.skill as SkillId] : null
-  const skillPhases = skill?.phases ?? []
-  const currentPhaseConfig = skillPhases.find((p) => p.id === content.phase) ?? null
 
   // Fields
   const [title, setTitle] = useState(content.title)
@@ -56,6 +47,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   const [thumbnailNotes, setThumbnailNotes] = useState(content.thumbnailNotes ?? "")
   const [description, setDescription] = useState(content.description ?? "")
   const [notes, setNotes] = useState(content.notes ?? "")
+  const [rawVideoUrl, setRawVideoUrl] = useState(content.rawVideoUrl ?? "")
   const [localAreaIds, setLocalAreaIds] = useState<string[]>(() => {
     try {
       if (Array.isArray(content.areas) && content.areas.length > 0) return content.areas.map((a: any) => a.area?.id ?? a.areaId).filter(Boolean)
@@ -64,6 +56,9 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
     } catch { return [] }
   })
 
+  // Elaboration active section
+  const [activeSection, setActiveSection] = useState<ElabSection>("hook")
+
   // AI
   const [aiLoading, setAiLoading] = useState<string | null>(null)
   const [aiResult, setAiResult] = useState<string | null>(null)
@@ -71,11 +66,10 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   const [aiField, setAiField] = useState<string | null>(null)
   const [aiAction, setAiAction] = useState<string | null>(null)
   const [aiConsideration, setAiConsideration] = useState("")
-  const [showTips, setShowTips] = useState(false)
 
-  const currentIdx = PHASE_ORDER.indexOf(content.phase)
-  const prevPhase = currentIdx > 0 ? PHASE_ORDER[currentIdx - 1] : null
-  const nextPhase = currentIdx < PHASE_ORDER.length - 1 ? PHASE_ORDER[currentIdx + 1] : null
+  const currentPhaseIdx = PHASES.findIndex((p) => p.id === content.phase)
+  const prevPhase = currentPhaseIdx > 0 ? PHASES[currentPhaseIdx - 1] : null
+  const nextPhase = currentPhaseIdx < PHASES.length - 1 ? PHASES[currentPhaseIdx + 1] : null
 
   // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -126,7 +120,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
       } else setAiResult("Erro. Verifique a ANTHROPIC_API_KEY.")
     } catch { setAiResult("Erro de conexão.") }
     setAiLoading(null); setAiConsideration("")
-  }, [content.skill, content.phase, content.series, title, hook, script, notes, research])
+  }, [content.skill, content.phase, content.series, title, hook, script, notes, research, targetDuration])
 
   function selectOption(opt: any) {
     if (aiField === "hook") { setHook(opt.text); save({ hook: opt.text }) }
@@ -145,10 +139,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
     setAiResult(null); setAiAction(null)
   }
 
-  function regenerate() {
-    if (!aiAction || !aiConsideration.trim()) return
-    callAI(aiAction, aiConsideration)
-  }
+  function regenerate() { if (aiAction && aiConsideration.trim()) callAI(aiAction, aiConsideration) }
 
   // ── Components ────────────────────────────────────────────────────────
 
@@ -175,24 +166,9 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
     )
   }
 
-  function PhaseHeader({ phase }: { phase: string }) {
-    const meta = PHASE_META[phase]
-    if (!meta) return null
-    const Icon = meta.icon
-    return (
-      <div className="flex items-center gap-2 mb-4">
-        <Icon size={18} className={meta.color} />
-        <h2 className="text-sm font-bold text-cockpit-text">{meta.label}</h2>
-        {currentPhaseConfig && <span className="text-[10px] text-cockpit-muted ml-1">— {currentPhaseConfig.description}</span>}
-      </div>
-    )
-  }
-
-  // ── AI Result Panel ───────────────────────────────────────────────────
-
   function AiResultPanel({ acceptField }: { acceptField?: string }) {
     if (aiOptions && aiOptions.length > 0) return (
-      <div className="rounded-xl border border-accent/30 bg-accent/5 overflow-hidden">
+      <div className="rounded-xl border border-accent/30 bg-accent/5 overflow-hidden mb-4">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-accent/20">
           <p className="text-xs font-semibold text-accent flex items-center gap-1"><Sparkles size={12} /> {aiField === "hook" ? "Escolha um hook" : aiField === "title" ? "Escolha um título" : "Opções"}</p>
           <button onClick={() => setAiOptions(null)} className="text-cockpit-muted hover:text-cockpit-text"><X size={14} /></button>
@@ -200,18 +176,17 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
         <div className="p-2 space-y-1.5 max-h-80 overflow-y-auto">{aiOptions.map((opt: any, i: number) => (
           <button key={i} onClick={() => selectOption(opt)} className="w-full text-left p-3 rounded-xl border border-cockpit-border bg-cockpit-bg hover:border-accent/40 hover:bg-accent/5 transition-all group">
             <p className="text-sm text-cockpit-text group-hover:text-accent font-medium">{opt.text}</p>
-            <div className="flex items-center gap-2 mt-1.5">
+            {(opt.style || opt.why) && <div className="flex items-center gap-2 mt-1.5">
               {opt.style && <span className="text-[10px] px-2 py-0.5 rounded-full bg-cockpit-border-light text-cockpit-muted">{opt.style}</span>}
               {opt.why && <span className="text-[10px] text-cockpit-muted">{opt.why}</span>}
-            </div>
+            </div>}
           </button>
         ))}</div>
-        <RegenerateBar />
+        <RegenBar />
       </div>
     )
-
     if (aiResult) return (
-      <div className="rounded-xl border border-accent/30 bg-accent/5 overflow-hidden">
+      <div className="rounded-xl border border-accent/30 bg-accent/5 overflow-hidden mb-4">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-accent/20">
           <p className="text-xs font-semibold text-accent flex items-center gap-1"><Sparkles size={12} /> Sugestão da IA</p>
           <button onClick={() => setAiResult(null)} className="text-cockpit-muted hover:text-cockpit-text"><X size={14} /></button>
@@ -221,19 +196,18 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
           {acceptField && <button onClick={() => useResult(acceptField)} className="text-xs text-accent font-semibold hover:underline">Usar esta sugestão</button>}
           <button onClick={() => setAiResult(null)} className="text-xs text-cockpit-muted hover:text-cockpit-text ml-auto">Descartar</button>
         </div>
-        <RegenerateBar />
+        <RegenBar />
       </div>
     )
-
     return null
   }
 
-  function RegenerateBar() {
+  function RegenBar() {
     return (
       <div className="px-4 py-2.5 border-t border-accent/20 flex items-center gap-2">
         <input type="text" value={aiConsideration} onChange={(e) => setAiConsideration(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") regenerate() }}
-          placeholder="Ajustes? (ex: mais curto, tom informal, público jovem)..."
+          placeholder="Ajustes? (ex: mais curto, tom informal)..."
           className="flex-1 px-3 py-1.5 bg-cockpit-bg border border-cockpit-border rounded-lg text-xs text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
         <button onClick={regenerate} disabled={!aiConsideration.trim() || !!aiLoading}
           className="flex items-center gap-1 px-3 py-1.5 text-xs text-accent font-medium border border-accent/20 rounded-lg hover:bg-accent/10 disabled:opacity-50">
@@ -243,171 +217,11 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
     )
   }
 
-  // ── Phase content ─────────────────────────────────────────────────────
+  // ── Duration presets ──────────────────────────────────────────────────
 
-  function renderPhase() {
-    const p = content.phase as string
-
-    if (p === "IDEA") {
-      const isShort = content.skill === "SHORT_VIDEO"
-      const isLong = content.skill === "LONG_VIDEO"
-      const isInsta = content.skill === "INSTAGRAM"
-      const presets = isShort
-        ? [{ label: "15s", value: 15 }, { label: "30s", value: 30 }, { label: "60s", value: 60 }, { label: "90s", value: 90 }]
-        : isLong
-        ? [{ label: "8 min", value: 480 }, { label: "10 min", value: 600 }, { label: "15 min", value: 900 }, { label: "20 min", value: 1200 }, { label: "25 min", value: 1500 }]
-        : [{ label: "15s", value: 15 }, { label: "30s", value: 30 }, { label: "60s", value: 60 }, { label: "90s", value: 90 }]
-
-      function formatDur(s: number) { return s >= 60 ? `${Math.floor(s / 60)} min${s % 60 > 0 ? ` ${s % 60}s` : ""}` : `${s}s` }
-
-      return (<>
-        <PhaseHeader phase="IDEA" />
-
-        {/* Duration selector */}
-        <div className="mb-6">
-          <p className="text-xs font-medium text-cockpit-muted mb-2">Duração estimada do conteúdo</p>
-          <div className="flex flex-wrap gap-2">
-            {presets.map((p) => (
-              <button key={p.value} onClick={() => { setTargetDuration(p.value); save({ targetDuration: p.value }) }}
-                className={cn(
-                  "px-4 py-2 rounded-xl text-sm font-medium border transition-all",
-                  targetDuration === p.value ? "bg-accent text-black border-accent" : "border-cockpit-border text-cockpit-muted hover:border-accent/30 hover:text-cockpit-text"
-                )}>
-                {p.label}
-              </button>
-            ))}
-          </div>
-          {targetDuration > 0 && (
-            <p className="text-[10px] text-cockpit-muted mt-2">
-              {isShort && targetDuration <= 30 && "Ideal para conteúdo direto: hook → ponto único → CTA. Máxima taxa de conclusão."}
-              {isShort && targetDuration > 30 && targetDuration <= 60 && "Sweet spot: espaço para storytelling ou tutorial com 3-5 pontos. Melhor balanço views/engajamento."}
-              {isShort && targetDuration > 60 && "Formato longo para Shorts/Reels: permite aprofundamento mas exige retenção alta. Use curiosity stacking."}
-              {isLong && targetDuration <= 600 && "Formato compacto: ideal para tutoriais diretos ou análises rápidas. Foco em eficiência."}
-              {isLong && targetDuration > 600 && targetDuration <= 900 && "Formato clássico do YouTube: espaço ideal para conteúdo denso com bom AVD."}
-              {isLong && targetDuration > 900 && "Formato longo: requer excelente estrutura de retenção. Use capítulos e open loops a cada 3-4 min."}
-              {isInsta && "Reels 30-90s performam melhor para educação. 15s para trends virais."}
-            </p>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-2 mb-6">
-          <AiBtn action="generate_hook" label="Gerar hooks" />
-          <AiBtn action="generate_research" label="Sugerir pesquisa" />
-        </div>
-        <AiResultPanel acceptField={aiAction === "generate_research" ? "research" : undefined} />
-        <Field label="Hook — o gancho dos primeiros segundos" value={hook} onChange={setHook} field="hook" placeholder="O que vai parar o scroll?" rows={3} />
-        <Field label="Pesquisa & Referências" value={research} onChange={setResearch} field="research" placeholder="Links, dados, fontes, inspirações..." rows={4} />
-      </>)
-    }
-
-    if (p === "RESEARCH") return (<>
-      <PhaseHeader phase="RESEARCH" />
-      <div className="flex flex-wrap gap-2 mb-6">
-        <AiBtn action="generate_research" label="Sugerir pontos de pesquisa" />
-      </div>
-      <AiResultPanel acceptField="research" />
-      <Field label="Pesquisa & Referências" value={research} onChange={setResearch} field="research" placeholder="Fontes, dados, estatísticas, ângulos..." rows={10} />
-    </>)
-
-    if (p === "SCRIPT") return (<>
-      <PhaseHeader phase="SCRIPT" />
-      <div className="flex flex-wrap gap-2 mb-6">
-        <AiBtn action="generate_script" label="Gerar roteiro completo" />
-        <AiBtn action="generate_hook" label="Refinar hook" />
-      </div>
-      <AiResultPanel acceptField="script" />
-      <Field label="Roteiro" value={script} onChange={setScript} field="script" placeholder="Escreva o roteiro..." rows={16} mono />
-      {skill && skill.scriptTemplates.length > 0 && !script && (
-        <div>
-          <p className="text-[10px] text-cockpit-muted font-medium mb-2">Templates:</p>
-          <div className="grid grid-cols-2 gap-2">{skill.scriptTemplates.map((t) => (
-            <button key={t.name} onClick={() => { setScript(t.structure.join("\n\n")); save({ script: t.structure.join("\n\n") }) }}
-              className="text-left p-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl hover:border-accent/30">
-              <p className="text-xs font-medium text-cockpit-text">{t.name}</p>
-              <p className="text-[10px] text-cockpit-muted mt-0.5 line-clamp-2">{t.structure.join(" → ")}</p>
-            </button>
-          ))}</div>
-        </div>
-      )}
-      <Field label="Hook" value={hook} onChange={setHook} field="hook" placeholder="Hook..." rows={2} />
-    </>)
-
-    if (p === "TITLE") return (<>
-      <PhaseHeader phase="TITLE" />
-      <div className="flex flex-wrap gap-2 mb-6">
-        <AiBtn action="generate_titles" label="Gerar opções de título" />
-      </div>
-      <AiResultPanel />
-      <div>
-        <p className="text-xs font-medium text-cockpit-muted mb-2">Título atual</p>
-        <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => save({ title })}
-          className="w-full px-4 py-3 bg-cockpit-bg border border-cockpit-border rounded-xl text-base font-semibold text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30" />
-      </div>
-    </>)
-
-    if (p === "THUMBNAIL") return (<>
-      <PhaseHeader phase="THUMBNAIL" />
-      <div className="flex flex-wrap gap-2 mb-6">
-        <AiBtn action="generate_thumbnail" label="Gerar conceitos visuais" />
-      </div>
-      <AiResultPanel acceptField="thumbnailNotes" />
-      <Field label="Notas da Thumbnail / Arte" value={thumbnailNotes} onChange={setThumbnailNotes} field="thumbnailNotes" placeholder="Composição, expressão facial, texto overlay, cores, estilo..." rows={8} />
-    </>)
-
-    if (p === "DESCRIPTION") return (<>
-      <PhaseHeader phase="DESCRIPTION" />
-      <div className="flex flex-wrap gap-2 mb-6">
-        <AiBtn action="generate_description" label="Gerar descrição e hashtags" />
-      </div>
-      <AiResultPanel acceptField="description" />
-      <Field label="Descrição / Caption" value={description} onChange={setDescription} field="description" placeholder="Descrição para a plataforma, SEO, caption..." rows={8} />
-      <Field label="Hashtags / Tags" value={(content.hashtags ?? []).join(", ")} onChange={() => {}} field="" placeholder="Serão preenchidas pela IA" rows={2} />
-    </>)
-
-    if (p === "RECORDING") return (<>
-      <PhaseHeader phase="RECORDING" />
-      <div className="p-3 bg-cockpit-bg border border-cockpit-border rounded-xl mb-4">
-        <p className="text-[10px] text-cockpit-muted font-medium mb-1">Hook</p>
-        <p className="text-sm text-cockpit-text">{hook || "—"}</p>
-      </div>
-      {script && <div className="p-3 bg-cockpit-bg border border-cockpit-border rounded-xl">
-        <p className="text-[10px] text-cockpit-muted font-medium mb-1">Roteiro</p>
-        <p className="text-sm text-cockpit-text whitespace-pre-wrap font-mono text-[13px] max-h-64 overflow-y-auto">{script}</p>
-      </div>}
-      <Field label="Notas de gravação" value={notes} onChange={setNotes} field="notes" placeholder="Setup, ângulos, takes..." rows={4} />
-    </>)
-
-    if (p === "EDITING") return (<>
-      <PhaseHeader phase="EDITING" />
-      <Field label="Notas de edição" value={notes} onChange={setNotes} field="notes" placeholder="Cortes, efeitos, música, SFX, timing..." rows={6} />
-      {script && <div className="p-3 bg-cockpit-bg border border-cockpit-border rounded-xl">
-        <p className="text-[10px] text-cockpit-muted font-medium mb-1">Roteiro (referência)</p>
-        <p className="text-xs text-cockpit-muted whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">{script}</p>
-      </div>}
-    </>)
-
-    if (p === "REVIEW") return (<>
-      <PhaseHeader phase="REVIEW" />
-      <div className="flex justify-center mb-6">
-        <AiBtn action="review" label="Revisar conteúdo completo com IA" />
-      </div>
-      <AiResultPanel />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {hook && <div className="p-3 bg-cockpit-bg border border-cockpit-border rounded-xl"><p className="text-[10px] text-cockpit-muted font-medium mb-1">Hook</p><p className="text-sm text-cockpit-text">{hook}</p></div>}
-        {title && <div className="p-3 bg-cockpit-bg border border-cockpit-border rounded-xl"><p className="text-[10px] text-cockpit-muted font-medium mb-1">Título</p><p className="text-sm font-semibold text-cockpit-text">{title}</p></div>}
-      </div>
-      {script && <div className="p-3 bg-cockpit-bg border border-cockpit-border rounded-xl"><p className="text-[10px] text-cockpit-muted font-medium mb-1">Roteiro</p><p className="text-xs text-cockpit-muted whitespace-pre-wrap font-mono max-h-40 overflow-y-auto">{script}</p></div>}
-      {description && <div className="p-3 bg-cockpit-bg border border-cockpit-border rounded-xl"><p className="text-[10px] text-cockpit-muted font-medium mb-1">Descrição</p><p className="text-xs text-cockpit-muted max-h-24 overflow-y-auto">{description}</p></div>}
-    </>)
-
-    // SCHEDULED / PUBLISHED
-    return (<>
-      <PhaseHeader phase={p} />
-      {content.publishedUrl && <a href={content.publishedUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-accent hover:underline p-3 bg-cockpit-bg border border-cockpit-border rounded-xl"><ExternalLink size={14} /> {content.publishedUrl}</a>}
-      <Field label="Anotações" value={notes} onChange={setNotes} field="notes" placeholder="Métricas, lições aprendidas..." rows={4} />
-    </>)
-  }
+  const durationPresets = content.skill === "LONG_VIDEO"
+    ? [{ l: "8 min", v: 480 }, { l: "10 min", v: 600 }, { l: "15 min", v: 900 }, { l: "20 min", v: 1200 }, { l: "25 min", v: 1500 }]
+    : [{ l: "15s", v: 15 }, { l: "30s", v: 30 }, { l: "60s", v: 60 }, { l: "90s", v: 90 }]
 
   // ── Render ─────────────────────────────────────────────────────────────
 
@@ -428,6 +242,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
                 <div className="flex items-center gap-2 mt-1">
                   {skill && <span className="text-[11px] text-cockpit-muted">{skill.label}</span>}
                   {content.series && <span className="text-[11px] text-cockpit-muted">· 📂 {content.series}</span>}
+                  {targetDuration > 0 && <span className="text-[11px] text-cockpit-muted">· {targetDuration >= 60 ? `${Math.floor(targetDuration / 60)}min` : `${targetDuration}s`}</span>}
                 </div>
               </div>
             </div>
@@ -437,22 +252,21 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
             </div>
           </div>
 
-          {/* Phase stepper */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-            {PHASE_ORDER.filter((ph) => !skill || skillPhases.some((sp) => sp.id === ph) || ["TITLE", "DESCRIPTION"].includes(ph)).map((ph) => {
-              const isActive = ph === content.phase
-              const isPast = PHASE_ORDER.indexOf(ph) < currentIdx
-              const meta = PHASE_META[ph]
-              const Icon = meta?.icon
+          {/* Phase stepper — 4 fases */}
+          <div className="flex items-center gap-2">
+            {PHASES.map((ph, i) => {
+              const isActive = ph.id === content.phase
+              const isPast = i < currentPhaseIdx
+              const Icon = ph.icon
               return (
-                <button key={ph} onClick={() => handlePhaseChange(ph)}
+                <button key={ph.id} onClick={() => handlePhaseChange(ph.id)}
                   className={cn(
-                    "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all border",
+                    "flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all border flex-1 justify-center",
                     isActive ? "bg-accent text-black border-accent" :
                     isPast ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
                     "border-cockpit-border text-cockpit-muted hover:border-cockpit-text/30"
                   )}>
-                  {Icon && <Icon size={12} />} {meta?.label ?? ph}
+                  <Icon size={14} /> {ph.label}
                 </button>
               )
             })}
@@ -462,7 +276,167 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
         {/* Body */}
         <div className="flex-1 overflow-hidden flex">
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-            {renderPhase()}
+
+            {/* ═══ IDEALIZAÇÃO ═══ */}
+            {content.phase === "IDEATION" && (<>
+              <div className="mb-4">
+                <p className="text-xs font-medium text-cockpit-muted mb-2">Duração estimada</p>
+                <div className="flex flex-wrap gap-2">
+                  {durationPresets.map((p) => (
+                    <button key={p.v} onClick={() => { setTargetDuration(p.v); save({ targetDuration: p.v }) }}
+                      className={cn("px-4 py-2 rounded-xl text-sm font-medium border transition-all",
+                        targetDuration === p.v ? "bg-accent text-black border-accent" : "border-cockpit-border text-cockpit-muted hover:border-accent/30")}>
+                      {p.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 mb-4">
+                <AiBtn action="generate_hook" label="Gerar hooks" />
+                <AiBtn action="generate_research" label="Sugerir pesquisa" />
+              </div>
+              <AiResultPanel acceptField={aiAction === "generate_research" ? "research" : undefined} />
+              <Field label="Hook — o gancho dos primeiros segundos" value={hook} onChange={setHook} field="hook" placeholder="O que vai parar o scroll?" rows={3} />
+              <Field label="Pesquisa & Referências" value={research} onChange={setResearch} field="research" placeholder="Links, dados, fontes, inspirações..." rows={4} />
+            </>)}
+
+            {/* ═══ ELABORAÇÃO ═══ */}
+            {content.phase === "ELABORATION" && (<>
+              {/* Section tabs */}
+              <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+                {ELABORATION_SECTIONS.map((s) => (
+                  <button key={s} onClick={() => setActiveSection(s)}
+                    className={cn("px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors",
+                      activeSection === s ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
+                    {ELAB_LABEL[s]}
+                  </button>
+                ))}
+              </div>
+
+              {/* Hook */}
+              {activeSection === "hook" && (<>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <AiBtn action="generate_hook" label="Gerar hooks com IA" />
+                </div>
+                <AiResultPanel />
+                <Field label="Hook" value={hook} onChange={setHook} field="hook" placeholder="O gancho dos primeiros segundos..." rows={3} />
+              </>)}
+
+              {/* Roteiro */}
+              {activeSection === "roteiro" && (<>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <AiBtn action="generate_script" label="Gerar roteiro com IA" />
+                </div>
+                <AiResultPanel acceptField="script" />
+                <Field label="Roteiro" value={script} onChange={setScript} field="script" placeholder="Escreva o roteiro completo..." rows={16} mono />
+                {skill && skill.scriptTemplates.length > 0 && !script && (
+                  <div>
+                    <p className="text-[10px] text-cockpit-muted font-medium mb-2">Templates:</p>
+                    <div className="grid grid-cols-2 gap-2">{skill.scriptTemplates.map((t) => (
+                      <button key={t.name} onClick={() => { setScript(t.structure.join("\n\n")); save({ script: t.structure.join("\n\n") }) }}
+                        className="text-left p-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl hover:border-accent/30">
+                        <p className="text-xs font-medium text-cockpit-text">{t.name}</p>
+                        <p className="text-[10px] text-cockpit-muted mt-0.5 line-clamp-2">{t.structure.join(" → ")}</p>
+                      </button>
+                    ))}</div>
+                  </div>
+                )}
+              </>)}
+
+              {/* Título */}
+              {activeSection === "titulo" && (<>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <AiBtn action="generate_titles" label="Gerar opções de título" />
+                </div>
+                <AiResultPanel />
+                <div>
+                  <p className="text-xs font-medium text-cockpit-muted mb-2">Título</p>
+                  <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => save({ title })}
+                    className="w-full px-4 py-3 bg-cockpit-bg border border-cockpit-border rounded-xl text-base font-semibold text-cockpit-text focus:outline-none focus:ring-2 focus:ring-accent/30" />
+                </div>
+              </>)}
+
+              {/* Thumbnail */}
+              {activeSection === "thumbnail" && (<>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <AiBtn action="generate_thumbnail" label="Gerar conceitos visuais" />
+                </div>
+                <AiResultPanel acceptField="thumbnailNotes" />
+                <Field label="Notas da Thumbnail / Arte" value={thumbnailNotes} onChange={setThumbnailNotes} field="thumbnailNotes" placeholder="Composição, expressão facial, texto overlay, cores..." rows={8} />
+              </>)}
+
+              {/* Descrição */}
+              {activeSection === "descricao" && (<>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <AiBtn action="generate_description" label="Gerar descrição e hashtags" />
+                </div>
+                <AiResultPanel acceptField="description" />
+                <Field label="Descrição / Caption" value={description} onChange={setDescription} field="description" placeholder="Descrição para a plataforma, SEO, caption..." rows={8} />
+              </>)}
+            </>)}
+
+            {/* ═══ ENVIADO P/ EDIÇÃO ═══ */}
+            {content.phase === "EDITING_SENT" && (<>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs font-medium text-cockpit-muted mb-2">Link do vídeo bruto (Google Drive)</p>
+                  <input type="url" value={rawVideoUrl} onChange={(e) => setRawVideoUrl(e.target.value)}
+                    onBlur={() => save({ rawVideoUrl: rawVideoUrl || null })}
+                    placeholder="https://drive.google.com/..."
+                    className="w-full px-4 py-3 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30" />
+                  {rawVideoUrl && (
+                    <a href={rawVideoUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-accent hover:underline mt-2">
+                      <ExternalLink size={12} /> Abrir vídeo bruto
+                    </a>
+                  )}
+                </div>
+                <Field label="Notas para o editor" value={notes} onChange={setNotes} field="notes" placeholder="Instruções de corte, efeitos, música, SFX..." rows={6} />
+
+                {/* Preview resumo */}
+                <div className="space-y-2 pt-4 border-t border-cockpit-border">
+                  <p className="text-[10px] text-cockpit-muted font-medium uppercase tracking-wider">Resumo do conteúdo</p>
+                  {hook && <div className="p-3 bg-cockpit-bg border border-cockpit-border rounded-xl"><p className="text-[10px] text-cockpit-muted mb-1">Hook</p><p className="text-sm text-cockpit-text">{hook}</p></div>}
+                  {script && <div className="p-3 bg-cockpit-bg border border-cockpit-border rounded-xl"><p className="text-[10px] text-cockpit-muted mb-1">Roteiro</p><p className="text-xs text-cockpit-muted whitespace-pre-wrap font-mono max-h-32 overflow-y-auto">{script}</p></div>}
+                </div>
+              </div>
+            </>)}
+
+            {/* ═══ PUBLICADO ═══ */}
+            {content.phase === "PUBLISHED" && (<>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs font-medium text-cockpit-muted mb-2">Link publicado</p>
+                  <input type="url" value={content.publishedUrl ?? ""} onChange={(e) => save({ publishedUrl: e.target.value || null })}
+                    placeholder="https://youtube.com/watch?v=..."
+                    className="w-full px-4 py-3 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30" />
+                  {content.publishedUrl && (
+                    <a href={content.publishedUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-accent hover:underline mt-2">
+                      <ExternalLink size={12} /> Abrir conteúdo publicado
+                    </a>
+                  )}
+                </div>
+
+                {/* Performance / análise */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <AiBtn action="review" label="Analisar performance com IA" />
+                </div>
+                <AiResultPanel />
+
+                <Field label="Métricas & Análise" value={notes} onChange={setNotes} field="notes" placeholder="Views, CTR, retenção, lições aprendidas..." rows={6} />
+
+                {/* Content summary */}
+                <div className="space-y-2 pt-4 border-t border-cockpit-border">
+                  <p className="text-[10px] text-cockpit-muted font-medium uppercase tracking-wider">Conteúdo produzido</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {hook && <div className="p-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl"><p className="text-[9px] text-cockpit-muted">Hook</p><p className="text-xs text-cockpit-text mt-0.5">{hook}</p></div>}
+                    {title && <div className="p-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl"><p className="text-[9px] text-cockpit-muted">Título</p><p className="text-xs font-semibold text-cockpit-text mt-0.5">{title}</p></div>}
+                  </div>
+                  {description && <div className="p-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl"><p className="text-[9px] text-cockpit-muted">Descrição</p><p className="text-xs text-cockpit-muted mt-0.5 line-clamp-3">{description}</p></div>}
+                </div>
+              </div>
+            </>)}
+
           </div>
 
           {/* Sidebar */}
@@ -485,18 +459,6 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
                   placeholder="Notas livres..." rows={4}
                   className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-xs text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30 resize-none" />
               </div>
-              {currentPhaseConfig && currentPhaseConfig.tips.length > 0 && (
-                <div>
-                  <button onClick={() => setShowTips(!showTips)} className="flex items-center gap-1.5 text-[10px] text-cockpit-muted font-medium uppercase tracking-wider mb-2 hover:text-cockpit-text w-full text-left">
-                    <Lightbulb size={11} className="text-amber-500" /> Dicas ({currentPhaseConfig.tips.length})
-                  </button>
-                  {showTips && <div className="space-y-1.5">{currentPhaseConfig.tips.map((tip, i) => (
-                    <div key={i} className="px-2.5 py-1.5 bg-amber-500/5 border border-amber-500/10 rounded-lg">
-                      <p className="text-[10px] text-cockpit-text leading-relaxed">{tip}</p>
-                    </div>
-                  ))}</div>}
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -504,8 +466,8 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
         {/* Footer */}
         <div className="px-6 py-3 border-t border-cockpit-border bg-cockpit-bg/50 flex items-center justify-between flex-shrink-0">
           {prevPhase ? (
-            <button onClick={() => handlePhaseChange(prevPhase)} className="flex items-center gap-1 px-3 py-2 text-xs text-cockpit-muted hover:text-cockpit-text border border-cockpit-border rounded-xl">
-              <ChevronLeft size={13} /> {PHASE_META[prevPhase]?.label ?? prevPhase}
+            <button onClick={() => handlePhaseChange(prevPhase.id)} className="flex items-center gap-1 px-3 py-2 text-xs text-cockpit-muted hover:text-cockpit-text border border-cockpit-border rounded-xl">
+              <ChevronLeft size={13} /> {prevPhase.label}
             </button>
           ) : <div />}
           <div className="flex items-center gap-2">
@@ -513,9 +475,9 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
             <span className="text-[10px] text-cockpit-muted">Salva automaticamente</span>
           </div>
           {nextPhase ? (
-            <button onClick={() => handlePhaseChange(nextPhase)}
+            <button onClick={() => handlePhaseChange(nextPhase.id)}
               className="flex items-center gap-1 px-4 py-2 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover">
-              {PHASE_META[nextPhase]?.label ?? nextPhase} <ChevronRight size={13} />
+              {nextPhase.label} <ChevronRight size={13} />
             </button>
           ) : <div />}
         </div>

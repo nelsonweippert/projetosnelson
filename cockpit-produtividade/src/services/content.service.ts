@@ -96,9 +96,9 @@ export async function getContentStats(userId: string) {
   })
   return {
     total: contents.length,
-    ideas: contents.filter((c) => c.phase === "IDEA").length,
-    inProduction: contents.filter((c) => ["RESEARCH", "SCRIPT", "RECORDING", "EDITING", "THUMBNAIL", "REVIEW"].includes(c.phase)).length,
-    scheduled: contents.filter((c) => c.phase === "SCHEDULED").length,
+    ideas: contents.filter((c) => c.phase === "IDEATION").length,
+    inProduction: contents.filter((c) => c.phase === "ELABORATION").length,
+    editingSent: contents.filter((c) => c.phase === "EDITING_SENT").length,
     published: contents.filter((c) => c.phase === "PUBLISHED").length,
     bySkill: {
       SHORT_VIDEO: contents.filter((c) => c.skill === "SHORT_VIDEO").length,

@@ -19,26 +19,17 @@ import { ContentDetailPanel } from "./ContentDetailPanel"
 type Content = any
 
 const PHASE_LABEL: Record<string, string> = {
-  IDEA: "Ideação", RESEARCH: "Pesquisa", SCRIPT: "Roteiro", TITLE: "Título",
-  THUMBNAIL: "Thumbnail", DESCRIPTION: "Descrição", RECORDING: "Gravação",
-  EDITING: "Edição", REVIEW: "Revisão", SCHEDULED: "Agendado",
-  PUBLISHED: "Publicado", ARCHIVED: "Arquivado",
+  IDEATION: "Idealização", ELABORATION: "Elaboração",
+  EDITING_SENT: "Em edição", PUBLISHED: "Publicado", ARCHIVED: "Arquivado",
 }
 const PHASE_COLOR: Record<string, string> = {
-  IDEA: "bg-violet-500/15 text-violet-500 border-violet-500/20",
-  RESEARCH: "bg-blue-500/15 text-blue-500 border-blue-500/20",
-  SCRIPT: "bg-amber-500/15 text-amber-500 border-amber-500/20",
-  TITLE: "bg-orange-500/15 text-orange-500 border-orange-500/20",
-  THUMBNAIL: "bg-pink-500/15 text-pink-500 border-pink-500/20",
-  DESCRIPTION: "bg-cyan-500/15 text-cyan-500 border-cyan-500/20",
-  RECORDING: "bg-red-500/15 text-red-500 border-red-500/20",
-  EDITING: "bg-rose-500/15 text-rose-500 border-rose-500/20",
-  REVIEW: "bg-emerald-500/15 text-emerald-500 border-emerald-500/20",
-  SCHEDULED: "bg-teal-500/15 text-teal-500 border-teal-500/20",
+  IDEATION: "bg-violet-500/15 text-violet-500 border-violet-500/20",
+  ELABORATION: "bg-amber-500/15 text-amber-500 border-amber-500/20",
+  EDITING_SENT: "bg-pink-500/15 text-pink-500 border-pink-500/20",
   PUBLISHED: "bg-accent/15 text-accent-dark border-accent/20",
 }
 const SKILL_ICON: Record<string, string> = { SHORT_VIDEO: "⚡", LONG_VIDEO: "🎬", INSTAGRAM: "📸" }
-const PIPELINE_PHASES: ContentPhase[] = ["IDEA", "RESEARCH", "SCRIPT", "TITLE", "THUMBNAIL", "DESCRIPTION", "RECORDING", "EDITING", "REVIEW", "SCHEDULED", "PUBLISHED"]
+const PIPELINE_PHASES: ContentPhase[] = ["IDEATION", "ELABORATION", "EDITING_SENT", "PUBLISHED"]
 
 type Tab = "overview" | "pipeline" | "ideas" | "skills"
 type ViewMode = "pipeline" | "list"
@@ -102,9 +93,9 @@ export function ConteudoClient({ initialContents, areas }: Props) {
     }
     return {
       total: contents.length,
-      ideas: phase["IDEA"] || 0,
-      inProd: (phase["RESEARCH"] || 0) + (phase["SCRIPT"] || 0) + (phase["RECORDING"] || 0) + (phase["EDITING"] || 0) + (phase["THUMBNAIL"] || 0) + (phase["REVIEW"] || 0),
-      scheduled: phase["SCHEDULED"] || 0,
+      ideas: phase["IDEATION"] || 0,
+      elaboration: phase["ELABORATION"] || 0,
+      editingSent: phase["EDITING_SENT"] || 0,
       published: phase["PUBLISHED"] || 0,
       phase, skill, series,
     }
@@ -124,7 +115,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
     return result
   }, [contents, search, skillFilters, phaseFilters, areaFilters])
 
-  const ideas = useMemo(() => contents.filter((c: Content) => c.phase === "IDEA"), [contents])
+  const ideas = useMemo(() => contents.filter((c: Content) => c.phase === "IDEATION"), [contents])
   const recentPublished = useMemo(() => contents.filter((c: Content) => c.phase === "PUBLISHED").slice(0, 5), [contents])
 
   function clearFilters() { setSearch(""); setSkillFilters([]); setPhaseFilters([]); setAreaFilters([]) }
@@ -434,16 +425,16 @@ export function ConteudoClient({ initialContents, areas }: Props) {
             {/* KPI Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
               <div className="cockpit-card !py-3">
-                <p className="text-[11px] text-cockpit-muted font-medium uppercase tracking-wider flex items-center gap-1"><Lightbulb size={10} /> Ideias</p>
+                <p className="text-[11px] text-cockpit-muted font-medium uppercase tracking-wider flex items-center gap-1"><Lightbulb size={10} /> Idealização</p>
                 <p className="text-2xl font-bold text-violet-400 mt-1">{counts.ideas}</p>
               </div>
               <div className="cockpit-card !py-3">
-                <p className="text-[11px] text-cockpit-muted font-medium uppercase tracking-wider flex items-center gap-1"><Clock size={10} /> Em produção</p>
-                <p className="text-2xl font-bold text-amber-400 mt-1">{counts.inProd}</p>
+                <p className="text-[11px] text-cockpit-muted font-medium uppercase tracking-wider">Elaboração</p>
+                <p className="text-2xl font-bold text-amber-400 mt-1">{counts.elaboration}</p>
               </div>
               <div className="cockpit-card !py-3">
-                <p className="text-[11px] text-cockpit-muted font-medium uppercase tracking-wider">Agendados</p>
-                <p className="text-2xl font-bold text-emerald-400 mt-1">{counts.scheduled}</p>
+                <p className="text-[11px] text-cockpit-muted font-medium uppercase tracking-wider">Em edição</p>
+                <p className="text-2xl font-bold text-pink-400 mt-1">{counts.editingSent}</p>
               </div>
               <div className="cockpit-card !py-3">
                 <p className="text-[11px] text-cockpit-muted font-medium uppercase tracking-wider flex items-center gap-1"><CheckCircle size={10} /> Publicados</p>
