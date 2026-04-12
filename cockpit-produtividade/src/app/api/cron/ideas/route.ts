@@ -34,7 +34,10 @@ export async function GET(req: NextRequest) {
 Termos monitorados: ${allTerms}
 
 Pesquise as tendências, notícias e assuntos mais quentes e relevantes HOJE sobre esses temas.
-Gere 10 ideias de conteúdo baseadas em novidades REAIS e tendências ATUAIS.
+Gere ideias distribuídas IGUALMENTE entre os termos.
+
+IMPORTANTE: O campo "term" DEVE ser EXATAMENTE um destes valores:
+${terms.map((t) => `- "${t.term}"`).join("\n")}
 
 Retorne APENAS um JSON array:
 [{
@@ -42,7 +45,7 @@ Retorne APENAS um JSON array:
   "summary": "resumo em 2-3 frases",
   "angle": "ângulo único para abordar",
   "hook": "sugestão de hook",
-  "term": "termo principal relacionado",
+  "term": "EXATAMENTE um dos termos listados acima",
   "relevance": "por que é tendência agora",
   "source": "fonte da informação",
   "score": 95
@@ -55,13 +58,21 @@ Retorne APENAS um JSON array:
 
       const ideas = JSON.parse(result.replace(/```json?\n?/g, "").replace(/```/g, "").trim())
 
+      // Force match terms
+      const termNames = terms.map((t) => t.term)
+      const validIdeas = ideas.filter((i: any) => i.title && i.summary).map((i: any) => {
+        let matched = termNames.find((t) => t === i.term)
+        if (!matched) matched = termNames.find((t) => i.title?.toLowerCase().includes(t.toLowerCase().split(/\s+/)[0])) || termNames[0]
+        return { ...i, term: matched }
+      })
+
       const created = await db.ideaFeed.createMany({
-        data: ideas.map((idea: any) => ({
+        data: validIdeas.map((idea: any) => ({
           title: idea.title,
           summary: idea.summary,
           angle: idea.angle || null,
           hook: idea.hook || null,
-          term: idea.term || allTerms,
+          term: idea.term,
           relevance: idea.relevance || null,
           source: idea.source || "cron",
           score: Math.min(100, Math.max(90, idea.score || 90)),

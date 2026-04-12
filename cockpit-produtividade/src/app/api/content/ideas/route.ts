@@ -40,8 +40,13 @@ Para cada tema, busque nestes locais (em ordem de prioridade):
 - Dados e estatísticas recentes
 - Lançamentos, atualizações ou eventos relevantes${customSourcesCtx}
 
-Depois, gere EXATAMENTE 10 ideias de conteúdo baseadas no que encontrou.
+Gere ideias de conteúdo distribuídas IGUALMENTE entre os termos monitorados.
 Cada ideia deve ter potencial viral e ser baseada em algo REAL e ATUAL.
+
+IMPORTANTE: O campo "term" DEVE ser EXATAMENTE um destes valores (copie literalmente):
+${terms.map((t) => `- "${t.term}"`).join("\n")}
+
+Distribua as ideias igualmente entre os termos. Se há 2 termos, gere 5 para cada. Se há 3, gere 3-4 para cada.
 
 Dê uma nota de POTENCIAL (90-100) para cada ideia baseado em:
 - Timing (quão quente é o assunto agora)
@@ -55,8 +60,8 @@ Retorne APENAS um JSON array válido (sem markdown, sem code blocks, sem texto a
   "summary": "resumo de 2-3 frases explicando o que é e por que é relevante AGORA",
   "angle": "ângulo único que diferencia este conteúdo dos demais",
   "hook": "sugestão de hook para os primeiros 3 segundos",
-  "term": "termo monitorado principal",
-  "relevance": "dado concreto ou contexto que prova que é tendência (ex: +500% de buscas, viral no Twitter, etc)",
+  "term": "EXATAMENTE um dos termos listados acima",
+  "relevance": "dado concreto ou contexto que prova que é tendência",
   "source": "fonte da informação (ex: Google Trends, Twitter, YouTube trending)",
   "score": 95
 }]`
@@ -92,10 +97,22 @@ Retorne APENAS um JSON array válido (sem markdown, sem code blocks, sem texto a
       }
     }
 
-    // Validate and sort by score
+    // Validate terms — force match to one of the monitored terms
+    const termNames = terms.map((t) => t.term)
     ideas = ideas
       .filter((i: any) => i.title && i.summary)
-      .map((i: any) => ({ ...i, score: Math.min(100, Math.max(90, i.score || 90)) }))
+      .map((i: any) => {
+        let matchedTerm = termNames.find((t) => t === i.term)
+        if (!matchedTerm) {
+          // Fuzzy match: find best matching term
+          matchedTerm = termNames.find((t) => {
+            const words = t.toLowerCase().split(/\s+/)
+            const ideaText = `${i.term || ""} ${i.title || ""}`.toLowerCase()
+            return words.some((w) => w.length >= 2 && ideaText.includes(w))
+          }) || termNames[0]
+        }
+        return { ...i, term: matchedTerm, score: Math.min(100, Math.max(90, i.score || 90)) }
+      })
       .sort((a: any, b: any) => b.score - a.score)
 
     // Save to database
