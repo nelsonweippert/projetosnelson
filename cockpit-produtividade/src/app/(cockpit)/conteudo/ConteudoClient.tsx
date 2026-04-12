@@ -374,7 +374,6 @@ export function ConteudoClient({ initialContents, areas }: Props) {
             {createStep === "details" && selectedSkill && (
               <div className="space-y-4">
                 <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Título / Ideia do conteúdo *" className="w-full px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30" autoFocus />
-                <textarea value={newHook} onChange={(e) => setNewHook(e.target.value)} placeholder="Hook / Gancho (opcional)" rows={2} className="w-full px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none" />
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div><label className="block text-xs text-cockpit-muted mb-1.5">Série (opcional)</label><input type="text" value={newSeries} onChange={(e) => setNewSeries(e.target.value)} placeholder="Ex: Dicas semanais" className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30" /></div>
                   <div><label className="block text-xs text-cockpit-muted mb-1.5">Data planejada</label><DatePicker value={newPlannedDate} onChange={setNewPlannedDate} /></div>
