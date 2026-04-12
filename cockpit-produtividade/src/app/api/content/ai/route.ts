@@ -117,9 +117,16 @@ ${hook ? `- Hook definido: ${hook}` : ""}
 ${research ? `- Pesquisa/referências: ${research}` : ""}
 ${notes ? `- Notas: ${notes}` : ""}
 
-Escreva um roteiro COMPLETO que caiba na duração alvo. seguindo as boas práticas da skill.
+Escreva um roteiro COMPLETO que caiba na duração alvo, seguindo as boas práticas da skill.
 ${skillConfig?.scriptTemplates?.[0] ? `Use como base a estrutura: ${skillConfig.scriptTemplates[0].structure.join(" → ")}` : ""}
-Marque indicações de edição como [CORTE], [B-ROLL], [ZOOM], [TEXTO: xxx], [SFX], [MÚSICA].`
+
+FORMATO DO ROTEIRO:
+- Divida em BLOCOS claros (ABERTURA, BLOCO 1, BLOCO 2, etc., FECHAMENTO)
+- Cada bloco deve ter o TEXTO EXATO que o apresentador vai falar
+- Escreva como fala natural, não como texto escrito
+- NÃO inclua marcações de edição ([CORTE], [B-ROLL], [ZOOM], etc)
+- NÃO inclua indicações técnicas de câmera ou efeitos
+- Foque 100% no conteúdo falado, estruturado por blocos`
       break
 
     case "generate_research":
@@ -136,6 +143,34 @@ Sugira um plano de pesquisa completo:
 3. Dados/estatísticas interessantes para incluir
 4. Referências e fontes sugeridas para pesquisar
 5. Ângulos únicos que poucos criadores exploram`
+      break
+
+    case "generate_editing_notes":
+      prompt = `Você é um editor de vídeo profissional. Analise o roteiro abaixo e gere um GUIA DE EDIÇÃO completo.
+
+Tipo de conteúdo: ${skillConfig?.label ?? "Geral"}
+Título: ${title ?? "Não definido"}${durationCtx}
+${hook ? `Hook: ${hook}` : ""}
+
+ROTEIRO:
+${script || "Não fornecido"}
+
+Gere indicações técnicas de edição BLOCO A BLOCO:
+1. Para cada bloco do roteiro, sugira:
+   - Tipo de corte (jump cut, J-cut, L-cut, transição suave)
+   - B-roll sugerido (o que mostrar enquanto fala)
+   - Texto overlay (palavras-chave na tela)
+   - Zoom/movimento de câmera
+   - Música/SFX (momentos de mudar tom, adicionar efeito)
+
+2. Indicações gerais:
+   - Estilo de música de fundo por seção
+   - Paleta de cores/filtro sugerido
+   - Ritmo de cortes (a cada Xs)
+   - Momentos de pattern interrupt
+   - Sugestões de memes/referências visuais se aplicável
+
+Formate como guia prático que o editor pode seguir passo a passo.`
       break
 
     case "deep_research":

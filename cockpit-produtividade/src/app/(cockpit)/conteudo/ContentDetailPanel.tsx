@@ -387,7 +387,20 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
                   className="w-full px-4 py-3 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-2 focus:ring-accent/30" />
                 {rawVideoUrl && <a href={rawVideoUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-accent hover:underline mt-2"><ExternalLink size={12} /> Abrir vídeo bruto</a>}
               </div>
-              <Field label="Notas para o editor" value={notes} onChange={setNotes} field="notes" placeholder="Cortes, efeitos, música, SFX, timing..." rows={6} />
+
+              <div className="flex flex-wrap gap-2">
+                <AiBtn action="generate_editing_notes" label="Gerar guia de edição com IA" />
+              </div>
+              <AiPanel acceptField="notes" />
+
+              <Field label="Guia de edição — indicações técnicas" value={notes} onChange={setNotes} field="notes" placeholder="Onde cortar, B-roll sugerido, zoom, texto overlay, música, SFX, transições, efeitos..." rows={10} />
+
+              {script && (
+                <details className="rounded-xl border border-cockpit-border overflow-hidden">
+                  <summary className="px-4 py-3 text-xs font-medium text-cockpit-muted cursor-pointer hover:bg-cockpit-surface-hover">📝 Roteiro (referência)</summary>
+                  <div className="px-4 py-3 border-t border-cockpit-border text-xs text-cockpit-muted whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">{script}</div>
+                </details>
+              )}
             </>)}
 
             {/* ═══ PUBLICADO ═══ */}
