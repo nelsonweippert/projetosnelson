@@ -7,6 +7,69 @@ export const maxDuration = 120
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+// ── Fetch real news from Google News RSS ────────────────────────────────
+
+async function fetchNewsForTerm(term: string): Promise<{ title: string; link: string; date: string }[]> {
+  try {
+    const encoded = encodeURIComponent(term)
+    const url = `https://news.google.com/rss/search?q=${encoded}&hl=pt-BR&gl=BR&ceid=BR:pt-419`
+    const res = await fetch(url, { next: { revalidate: 0 } })
+    if (!res.ok) return []
+    const xml = await res.text()
+
+    // Parse RSS XML (simple regex extraction)
+    const items: { title: string; link: string; date: string }[] = []
+    const itemRegex = /<item>([\s\S]*?)<\/item>/g
+    let match
+    while ((match = itemRegex.exec(xml)) !== null && items.length < 10) {
+      const itemXml = match[1]
+      const titleMatch = itemXml.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || itemXml.match(/<title>(.*?)<\/title>/)
+      const linkMatch = itemXml.match(/<link>(.*?)<\/link>/)
+      const dateMatch = itemXml.match(/<pubDate>(.*?)<\/pubDate>/)
+      if (titleMatch) {
+        items.push({
+          title: titleMatch[1].replace(/<[^>]*>/g, "").trim(),
+          link: linkMatch?.[1] || "",
+          date: dateMatch?.[1] || "",
+        })
+      }
+    }
+    return items
+  } catch (err) {
+    console.error(`[news] Failed to fetch for "${term}":`, err)
+    return []
+  }
+}
+
+// ── Fetch trending from YouTube ─────────────────────────────────────────
+
+async function fetchYouTubeTrends(term: string): Promise<string[]> {
+  try {
+    const encoded = encodeURIComponent(term)
+    const url = `https://www.youtube.com/results?search_query=${encoded}&sp=CAISBAgBEAE%253D`
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "pt-BR" },
+      next: { revalidate: 0 },
+    })
+    if (!res.ok) return []
+    const html = await res.text()
+
+    // Extract video titles from YouTube HTML
+    const titles: string[] = []
+    const titleRegex = /"title":\{"runs":\[\{"text":"(.*?)"\}/g
+    let m
+    while ((m = titleRegex.exec(html)) !== null && titles.length < 8) {
+      const decoded = m[1].replace(/\\u0026/g, "&").replace(/\\"/g, '"')
+      if (decoded.length > 10 && decoded.length < 150) titles.push(decoded)
+    }
+    return titles
+  } catch {
+    return []
+  }
+}
+
+// ── Main handler ────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
@@ -15,54 +78,67 @@ export async function POST(req: NextRequest) {
   const terms = await db.monitorTerm.findMany({ where: { userId, isActive: true } })
   if (terms.length === 0) return NextResponse.json({ error: "Adicione termos de monitoramento primeiro" }, { status: 400 })
 
-  const allTerms = terms.map((t) => t.term).join(", ")
-
   // Get user's custom research sources
   const userSources = await db.skillSource.findMany({
-    where: { userId, skillId: "RESEARCH" },
-    orderBy: { createdAt: "desc" },
-    take: 20,
+    where: { userId, skillId: "RESEARCH" }, orderBy: { createdAt: "desc" }, take: 20,
   })
   const customSourcesCtx = userSources.length > 0
-    ? `\n\nFONTES ADICIONAIS DO USUÁRIO para pesquisar (priorize estas):\n${userSources.map((s) => `- ${s.title}${s.url ? ` (${s.url})` : ""}${s.content ? `: ${s.content}` : ""}`).join("\n")}`
+    ? `\n\nFontes adicionais do usuário:\n${userSources.map((s) => `- ${s.title}${s.url ? ` (${s.url})` : ""}${s.content ? `: ${s.content}` : ""}`).join("\n")}`
     : ""
 
   try {
-    const searchPrompt = `Pesquise na internet as notícias, tendências e assuntos mais quentes de HOJE sobre estes temas: ${allTerms}
+    // Step 1: Fetch REAL news for each term in parallel
+    const newsPerTerm: Record<string, { news: { title: string; link: string; date: string }[]; ytTrends: string[] }> = {}
 
-Para cada tema, busque nestes locais (em ordem de prioridade):
-- Google Trends (tendências de busca nas últimas 24h)
-- YouTube Trending e "Em alta" (vídeos performando agora)
-- TikTok Creative Center (trends de formato e áudio)
-- Reddit popular e subreddits relevantes (discussões orgânicas)
-- Twitter/X Trending Topics (assuntos do momento)
-- Notícias recentes (últimas 24-72h)
-- Dados e estatísticas recentes
-- Lançamentos, atualizações ou eventos relevantes${customSourcesCtx}
+    await Promise.all(terms.map(async (t) => {
+      const [news, ytTrends] = await Promise.all([
+        fetchNewsForTerm(t.term),
+        fetchYouTubeTrends(t.term),
+      ])
+      newsPerTerm[t.term] = { news, ytTrends }
+    }))
 
-Gere ideias de conteúdo distribuídas IGUALMENTE entre os termos monitorados.
-Cada ideia deve ter potencial viral e ser baseada em algo REAL e ATUAL.
+    // Step 2: Build context with REAL data
+    let newsContext = ""
+    for (const t of terms) {
+      const data = newsPerTerm[t.term]
+      newsContext += `\n\n=== TERMO: "${t.term}" ===\n`
+      if (data.news.length > 0) {
+        newsContext += `NOTÍCIAS REAIS DE HOJE (Google News):\n`
+        data.news.forEach((n, i) => { newsContext += `${i + 1}. ${n.title} (${n.date})\n` })
+      }
+      if (data.ytTrends.length > 0) {
+        newsContext += `\nVÍDEOS EM ALTA NO YOUTUBE:\n`
+        data.ytTrends.forEach((t, i) => { newsContext += `${i + 1}. ${t}\n` })
+      }
+    }
 
-IMPORTANTE: O campo "term" DEVE ser EXATAMENTE um destes valores (copie literalmente):
-${terms.map((t) => `- "${t.term}"`).join("\n")}
+    // Step 3: Ask Claude to generate ideas based on REAL data
+    const ideasPerTerm = Math.max(3, Math.floor(10 / terms.length))
+    const searchPrompt = `Você é um curador de conteúdo digital que analisa notícias e tendências REAIS para identificar oportunidades de conteúdo.
 
-Distribua as ideias igualmente entre os termos. Se há 2 termos, gere 5 para cada. Se há 3, gere 3-4 para cada.
+Abaixo estão NOTÍCIAS REAIS e VÍDEOS EM ALTA coletados AGORA de Google News e YouTube:
+${newsContext}
+${customSourcesCtx}
 
-Dê uma nota de POTENCIAL (90-100) para cada ideia baseado em:
-- Timing (quão quente é o assunto agora)
-- Volume de busca estimado
-- Potencial de engajamento
-- Lacuna de conteúdo (poucos criadores cobriram)
+Com base EXCLUSIVAMENTE nestas notícias e tendências REAIS acima, gere ${ideasPerTerm} ideias de conteúdo para CADA termo monitorado.
 
-Retorne APENAS um JSON array válido (sem markdown, sem code blocks, sem texto antes ou depois):
+REGRAS:
+1. Cada ideia DEVE ser baseada em uma notícia ou tendência REAL listada acima
+2. O campo "term" DEVE ser EXATAMENTE um destes valores: ${terms.map((t) => `"${t.term}"`).join(", ")}
+3. Distribua igualmente entre os termos
+4. Priorize notícias das últimas 24-48h
+5. Score 90-100 baseado em: quão recente é, potencial viral, e lacuna de conteúdo
+
+Retorne APENAS um JSON array (sem markdown, sem code blocks):
 [{
-  "title": "título claro e atrativo para o conteúdo",
-  "summary": "resumo de 2-3 frases explicando o que é e por que é relevante AGORA",
-  "angle": "ângulo único que diferencia este conteúdo dos demais",
+  "title": "título atrativo para o conteúdo baseado na notícia real",
+  "summary": "resumo de 2-3 frases conectando a notícia à oportunidade de conteúdo",
+  "angle": "ângulo único para diferenciar seu conteúdo",
   "hook": "sugestão de hook para os primeiros 3 segundos",
-  "term": "EXATAMENTE um dos termos listados acima",
-  "relevance": "dado concreto ou contexto que prova que é tendência",
-  "source": "fonte da informação (ex: Google Trends, Twitter, YouTube trending)",
+  "term": "EXATAMENTE um dos termos listados",
+  "relevance": "notícia real que originou esta ideia + por que é relevante AGORA",
+  "source": "Google News / YouTube Trending",
   "score": 95
 }]`
 
@@ -77,34 +153,27 @@ Retorne APENAS um JSON array válido (sem markdown, sem code blocks, sem texto a
       return NextResponse.json({ error: "Resposta inesperada da IA" }, { status: 500 })
     }
 
-    // Parse JSON from response
-    const cleanJson = responseText.text
-      .replace(/```json?\n?/g, "")
-      .replace(/```/g, "")
-      .trim()
-
+    // Parse JSON
+    const cleanJson = responseText.text.replace(/```json?\n?/g, "").replace(/```/g, "").trim()
     let ideas: any[]
     try {
       ideas = JSON.parse(cleanJson)
     } catch {
-      // Try to extract JSON array from the response
       const match = cleanJson.match(/\[[\s\S]*\]/)
-      if (match) {
-        ideas = JSON.parse(match[0])
-      } else {
+      if (match) ideas = JSON.parse(match[0])
+      else {
         console.error("[ideas] Failed to parse:", cleanJson.substring(0, 500))
         return NextResponse.json({ error: "Erro ao processar resposta da IA" }, { status: 500 })
       }
     }
 
-    // Validate terms — force match to one of the monitored terms
+    // Validate terms
     const termNames = terms.map((t) => t.term)
     ideas = ideas
       .filter((i: any) => i.title && i.summary)
       .map((i: any) => {
         let matchedTerm = termNames.find((t) => t === i.term)
         if (!matchedTerm) {
-          // Fuzzy match: find best matching term
           matchedTerm = termNames.find((t) => {
             const words = t.toLowerCase().split(/\s+/)
             const ideaText = `${i.term || ""} ${i.title || ""}`.toLowerCase()
@@ -115,28 +184,34 @@ Retorne APENAS um JSON array válido (sem markdown, sem code blocks, sem texto a
       })
       .sort((a: any, b: any) => b.score - a.score)
 
-    // Save to database
+    // Save
     const created = await db.ideaFeed.createMany({
       data: ideas.map((idea: any) => ({
         title: idea.title,
         summary: idea.summary,
         angle: idea.angle || null,
         hook: idea.hook || null,
-        term: idea.term || allTerms,
-        relevance: `[${idea.score}/100] ${idea.relevance || ""} ${idea.source ? `(Fonte: ${idea.source})` : ""}`.trim(),
-        source: idea.source || "ai_research",
+        term: idea.term,
+        relevance: `[${idea.score}/100] ${idea.relevance || ""}`.trim(),
+        source: idea.source || "Google News + YouTube",
+        score: idea.score,
         userId,
       })),
     })
 
-    // Fetch all ideas to return
+    // Return all ideas
     const allIdeas = await db.ideaFeed.findMany({
       where: { userId, isDiscarded: false },
       orderBy: { createdAt: "desc" },
       take: 100,
     })
 
-    return NextResponse.json({ ok: true, created: created.count, ideas: allIdeas })
+    return NextResponse.json({
+      ok: true,
+      created: created.count,
+      ideas: allIdeas,
+      debug: { newsFound: Object.fromEntries(terms.map((t) => [t.term, newsPerTerm[t.term]?.news?.length ?? 0])) },
+    })
   } catch (err) {
     console.error("[ideas] Error:", err)
     return NextResponse.json({ error: "Erro ao gerar ideias: " + (err instanceof Error ? err.message : String(err)) }, { status: 500 })
