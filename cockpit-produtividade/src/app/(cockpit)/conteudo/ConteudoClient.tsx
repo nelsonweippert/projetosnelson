@@ -123,10 +123,18 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   async function handleCreateFromIdea(idea: any, skillId: SkillId) {
     const platform = skillId === "SHORT_VIDEO" ? "TIKTOK" : skillId === "LONG_VIDEO" ? "YOUTUBE" : "INSTAGRAM"
     const format = skillId === "SHORT_VIDEO" ? "SHORT" : skillId === "LONG_VIDEO" ? "LONG_VIDEO" : "POST"
+    // Build research from idea data
+    const researchText = [
+      idea.summary && `📋 ${idea.summary}`,
+      idea.relevance && `📈 ${idea.relevance}`,
+      idea.angle && `💡 Ângulo: ${idea.angle}`,
+      idea.source && `📰 Fonte: ${idea.source}`,
+    ].filter(Boolean).join("\n\n")
     startTransition(async () => {
       const result = await createContentAction({
         title: idea.title, hook: idea.hook || undefined, platform, format,
-        skill: skillId, areaIds: [],
+        skill: skillId, areaIds: [], ideaFeedId: idea.id,
+        research: researchText || undefined,
       })
       if (result.success) {
         setContents((prev) => [result.data as Content, ...prev])

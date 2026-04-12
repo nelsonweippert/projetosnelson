@@ -138,6 +138,36 @@ Sugira um plano de pesquisa completo:
 5. Ângulos únicos que poucos criadores exploram`
       break
 
+    case "deep_research":
+      prompt = `Você é um pesquisador de conteúdo especializado. Faça uma pesquisa APROFUNDADA sobre o tema abaixo.
+
+Tema: ${title ?? "Não definido"}
+Tipo de conteúdo: ${skillConfig?.label ?? "Geral"}${durationCtx}
+${research ? `\nPesquisa existente:\n${research}` : ""}
+${hook ? `Hook: ${hook}` : ""}
+${notes ? `Notas do criador: ${notes}` : ""}
+
+Pesquise PROFUNDAMENTE e retorne:
+
+1. **CONTEXTO COMPLETO**: O que está acontecendo sobre este tema agora? Explique como se fosse um briefing para um jornalista.
+
+2. **DADOS E NÚMEROS**: Estatísticas, percentuais, valores, métricas reais que dão credibilidade ao conteúdo. Cite fontes quando possível.
+
+3. **DIFERENTES PERSPECTIVAS**: Visão de especialistas, opiniões contrastantes, o que os defensores e críticos dizem.
+
+4. **TIMELINE**: Cronologia dos eventos recentes relacionados (o que aconteceu, quando, e o que vem a seguir).
+
+5. **OPORTUNIDADE DE CONTEÚDO**: Por que AGORA é o momento de fazer este conteúdo? Qual é a janela de oportunidade?
+
+6. **PONTOS QUE NINGUÉM ESTÁ COBRINDO**: Lacunas no conteúdo existente. O que os outros criadores estão ignorando?
+
+7. **PERGUNTAS DO PÚBLICO**: As 5-8 perguntas mais comuns que as pessoas têm sobre este tema.
+
+8. **FONTES RECOMENDADAS**: Links e referências para aprofundar a pesquisa.
+
+Formate com markdown. Seja extenso e detalhado — esta pesquisa será a base de todo o conteúdo.`
+      break
+
     case "generate_thumbnail":
       prompt = `Você é um especialista em design de thumbnails para ${skillConfig?.label ?? "conteúdo digital"}.
 

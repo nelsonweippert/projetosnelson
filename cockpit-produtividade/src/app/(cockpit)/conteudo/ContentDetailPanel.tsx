@@ -130,12 +130,18 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
 
   function useResult(field: string) {
     if (!aiResult) return
-    const map: Record<string, [string, (v: string) => void]> = {
-      script: ["script", setScript], research: ["research", setResearch],
-      thumbnailNotes: ["thumbnailNotes", setThumbnailNotes], description: ["description", setDescription],
+    if (field === "research" && research.trim()) {
+      // Append to existing research
+      const combined = `${research}\n\n---\n\n${aiResult}`
+      setResearch(combined); save({ research: combined })
+    } else {
+      const map: Record<string, [string, (v: string) => void]> = {
+        script: ["script", setScript], research: ["research", setResearch],
+        thumbnailNotes: ["thumbnailNotes", setThumbnailNotes], description: ["description", setDescription],
+      }
+      const [key, setter] = map[field] ?? []
+      if (key && setter) { setter(aiResult); save({ [key]: aiResult }) }
     }
-    const [key, setter] = map[field] ?? []
-    if (key && setter) { setter(aiResult); save({ [key]: aiResult }) }
     setAiResult(null); setAiAction(null)
   }
 
@@ -278,7 +284,18 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
 
             {/* ═══ IDEALIZAÇÃO ═══ */}
             {content.phase === "IDEATION" && (<>
-              <div className="mb-4">
+              {/* Base de referências (dados da ideia original) */}
+              {research && (
+                <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-blue-500/15">
+                    <p className="text-xs font-semibold text-blue-400 flex items-center gap-1.5">📰 Base de referências (pesquisa do agente)</p>
+                  </div>
+                  <div className="px-4 py-3 text-sm text-cockpit-text whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{research}</div>
+                </div>
+              )}
+
+              {/* Duration */}
+              <div>
                 <p className="text-xs font-medium text-cockpit-muted mb-2">Duração estimada</p>
                 <div className="flex flex-wrap gap-2">
                   {durationPresets.map((p) => (
@@ -291,13 +308,19 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2 mb-4">
+              {/* AI actions */}
+              <div className="flex flex-wrap gap-2">
+                <AiBtn action="deep_research" label="Pesquisar mais sobre o tema" />
                 <AiBtn action="generate_hook" label="Gerar hooks" />
-                <AiBtn action="generate_research" label="Sugerir pesquisa" />
+                <AiBtn action="generate_research" label="Sugerir pontos de pesquisa" />
               </div>
-              <AiResultPanel acceptField={aiAction === "generate_research" ? "research" : undefined} />
+              <AiResultPanel acceptField={aiAction === "generate_research" || aiAction === "deep_research" ? "research" : undefined} />
+
+              {/* Hook */}
               <Field label="Hook — o gancho dos primeiros segundos" value={hook} onChange={setHook} field="hook" placeholder="O que vai parar o scroll?" rows={3} />
-              <Field label="Pesquisa & Referências" value={research} onChange={setResearch} field="research" placeholder="Links, dados, fontes, inspirações..." rows={4} />
+
+              {/* Research editable */}
+              <Field label="Pesquisa & Referências (editável)" value={research} onChange={setResearch} field="research" placeholder="Links, dados, fontes, inspirações... A IA adicionará dados aqui." rows={6} />
             </>)}
 
             {/* ═══ ELABORAÇÃO ═══ */}

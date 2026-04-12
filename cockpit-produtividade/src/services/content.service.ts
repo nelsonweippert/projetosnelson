@@ -17,7 +17,8 @@ export async function createContent(userId: string, data: {
   format?: ContentFormat
   skill?: ContentSkill
   hook?: string
-  series?: string
+  research?: string
+  ideaFeedId?: string
   tags?: string[]
   plannedDate?: Date | null
   areaIds?: string[]
