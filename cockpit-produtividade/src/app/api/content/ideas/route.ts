@@ -17,16 +17,28 @@ export async function POST(req: NextRequest) {
 
   const allTerms = terms.map((t) => t.term).join(", ")
 
+  // Get user's custom research sources
+  const userSources = await db.skillSource.findMany({
+    where: { userId, skillId: "RESEARCH" },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  })
+  const customSourcesCtx = userSources.length > 0
+    ? `\n\nFONTES ADICIONAIS DO USUÁRIO para pesquisar (priorize estas):\n${userSources.map((s) => `- ${s.title}${s.url ? ` (${s.url})` : ""}${s.content ? `: ${s.content}` : ""}`).join("\n")}`
+    : ""
+
   try {
-    // Step 1: Search for trending topics using Claude with web search context
     const searchPrompt = `Pesquise na internet as notícias, tendências e assuntos mais quentes de HOJE sobre estes temas: ${allTerms}
 
-Para cada tema, busque:
+Para cada tema, busque nestes locais (em ordem de prioridade):
+- Google Trends (tendências de busca nas últimas 24h)
+- YouTube Trending e "Em alta" (vídeos performando agora)
+- TikTok Creative Center (trends de formato e áudio)
+- Reddit popular e subreddits relevantes (discussões orgânicas)
+- Twitter/X Trending Topics (assuntos do momento)
 - Notícias recentes (últimas 24-72h)
-- Vídeos virais ou em alta
-- Discussões populares em redes sociais
 - Dados e estatísticas recentes
-- Lançamentos, atualizações ou eventos relevantes
+- Lançamentos, atualizações ou eventos relevantes${customSourcesCtx}
 
 Depois, gere EXATAMENTE 10 ideias de conteúdo baseadas no que encontrou.
 Cada ideia deve ter potencial viral e ser baseada em algo REAL e ATUAL.

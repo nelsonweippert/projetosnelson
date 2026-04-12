@@ -11,7 +11,7 @@ import { cn, formatDate } from "@/lib/utils"
 import { createContentAction, archiveContentAction, advanceContentPhaseAction } from "@/app/actions/content.actions"
 import { getSkillSourcesAction, addSkillSourceAction, deleteSkillSourceAction } from "@/app/actions/skill.actions"
 import { getMonitorTermsAction, addMonitorTermAction, deleteMonitorTermAction, getIdeasAction, discardIdeaAction, markIdeaUsedAction, generateIdeasNowAction } from "@/app/actions/idea.actions"
-import { CONTENT_SKILLS, SKILL_LIST, type SkillId } from "@/config/content-skills"
+import { CONTENT_SKILLS, SKILL_LIST, ALL_SKILLS, type SkillId } from "@/config/content-skills"
 import type { Area, ContentPhase, Platform, ContentFormat } from "@/types"
 import { DatePicker } from "@/components/ui/DatePicker"
 import { ContentDetailPanel } from "./ContentDetailPanel"
@@ -667,7 +667,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
         {/* ═══ TAB: SKILLS & BOAS PRÁTICAS ═══ */}
         {tab === "skills" && (
           <div className="space-y-6">
-            {SKILL_LIST.map((skill) => {
+            {ALL_SKILLS.map((skill) => {
               const isExpanded = expandedSkill === skill.id
               const uSources = userSources[skill.id] ?? []
               return (

@@ -4,7 +4,7 @@
 // and platform algorithm behavior (2024-2025).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export type SkillId = "SHORT_VIDEO" | "LONG_VIDEO" | "INSTAGRAM"
+export type SkillId = "SHORT_VIDEO" | "LONG_VIDEO" | "INSTAGRAM" | "RESEARCH"
 
 export type PhaseId =
   | "IDEA" | "RESEARCH" | "SCRIPT" | "RECORDING"
@@ -769,6 +769,79 @@ const INSTAGRAM: ContentSkill = {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SKILL 4: RESEARCH (Busca e curadoria de ideias)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RESEARCH: ContentSkill = {
+  id: "RESEARCH",
+  label: "Pesquisa & Tendências",
+  icon: "🔍",
+  description: "Busca, curadoria e identificação de ideias com potencial viral",
+  platforms: ["YOUTUBE", "TIKTOK", "INSTAGRAM"],
+  phases: [
+    {
+      id: "IDEA",
+      label: "Busca",
+      description: "Buscar tendências e notícias nos termos monitorados",
+      checklist: [],
+      tips: [
+        "Google Trends mostra volume de busca em tempo real — filtre por 'últimas 24h' para pegar trends emergentes",
+        "YouTube Trending e 'Em alta' revelam o que está performando AGORA no seu nicho",
+        "Comentários em vídeos virais são goldmine de ideias — perguntas não respondidas = oportunidade",
+        "Reddit r/popular e subreddits do nicho mostram discussões orgânicas antes de virar mainstream",
+        "Twitter/X Trending Topics + busca avançada por engajamento filtra sinais de ruído",
+        "TikTok Creative Center mostra trends de áudio, hashtags e formatos em ascensão",
+        "Newsletter de nicho (Morning Brew, TLDR, etc) compilam tendências digeridas",
+        "Ferramentas de social listening (Brand24, Mention) captam menções em tempo real",
+      ],
+      aiPromptContext: "Pesquise tendências atuais nos termos monitorados. Busque notícias das últimas 24-72h, vídeos virais, discussões em alta, dados de busca. Priorize assuntos com alto volume e poucos criadores cobrindo.",
+    },
+  ],
+  bestPractices: [
+    "Monitore 5-10 termos estratégicos — amplo o suficiente para volume, específico para relevância",
+    "Busque diariamente nos mesmos horários — trends têm ciclo de vida de 24-72h",
+    "Google Trends 'últimas 24h' captura trends ANTES de saturar — timing é tudo",
+    "Cruze tendências: tema trending + ângulo do seu nicho = conteúdo único",
+    "YouTube 'Em alta' + filtro por país mostra o que funciona na sua região",
+    "Comentários em vídeos virais revelam dúvidas e frustrações = ideias prontas",
+    "Reddit é o detector antecipado — memes e discussões aparecem lá 24-48h antes das outras redes",
+    "TikTok Creative Center > Trends > filtro por categoria = tendências específicas do nicho",
+    "Acompanhe creators maiores do nicho — o que eles postam indica direção do algoritmo",
+    "Salve TUDO que chamar atenção, mesmo que não use agora — banco de ideias é cumulativo",
+  ],
+  commonMistakes: [
+    "Buscar apenas quando precisa de ideia (deveria ser diário e automático)",
+    "Copiar trends sem adaptar ao seu estilo/nicho",
+    "Ignorar trends 'pequenos' — esses têm menor competição e maior chance de ranquear",
+    "Não documentar a fonte — quando for criar o conteúdo, precisa da referência",
+    "Focar apenas em volume e ignorar a lacuna de conteúdo (muita gente já fez?)",
+    "Não validar se o tema tem demanda real (busca no YouTube/Google antes de produzir)",
+    "Demorar demais para agir — trend de 72h não espera",
+    "Buscar em apenas uma fonte (precisa cruzar 3-4 fontes para validar)",
+  ],
+  kpis: [
+    { label: "Ideias geradas / semana", target: "> 30", why: "Volume de ideias garante que sempre há opções boas para escolher" },
+    { label: "Score médio das ideias", target: "> 94", why: "Ideias com score alto têm timing, volume e lacuna confirmados" },
+    { label: "Taxa de conversão", target: "> 20%", why: "% de ideias que viram conteúdo — muito baixo = termos errados" },
+    { label: "Tempo ideia → publicação", target: "< 48h", why: "Trends perdem relevância rápido — velocidade é vantagem competitiva" },
+  ],
+  scriptTemplates: [],
+  sources: [
+    { title: "Google Trends", url: "https://trends.google.com.br/trending", description: "Tendências de busca em tempo real — filtrar por país, categoria e período" },
+    { title: "YouTube Trending", url: "https://www.youtube.com/feed/trending", description: "Vídeos em alta no YouTube — filtrar por categoria" },
+    { title: "TikTok Creative Center", url: "https://ads.tiktok.com/business/creativecenter/inspiration/popular/pc/en", description: "Trends de áudio, hashtags e formatos no TikTok" },
+    { title: "Reddit Popular", url: "https://www.reddit.com/r/popular/", description: "Discussões mais populares — detector antecipado de trends" },
+    { title: "Twitter/X Trending", url: "https://twitter.com/explore/tabs/trending", description: "Trending topics em tempo real" },
+    { title: "Exploding Topics", url: "https://explodingtopics.com", description: "Temas em crescimento antes de se tornarem mainstream" },
+    { title: "BuzzSumo", url: "https://buzzsumo.com", description: "Conteúdo mais compartilhado por tema — identifica o que engaja" },
+    { title: "AnswerThePublic", url: "https://answerthepublic.com", description: "Perguntas que as pessoas fazem sobre qualquer tema — ideias de conteúdo diretas" },
+    { title: "SparkToro", url: "https://sparktoro.com", description: "Onde seu público-alvo consome conteúdo — descobre fontes e influenciadores" },
+    { title: "Glimpse", url: "https://meetglimpse.com", description: "Extensão do Google Trends com dados adicionais e previsões" },
+  ],
+  lastUpdated: "2026-04-12",
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Export
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -776,6 +849,8 @@ export const CONTENT_SKILLS: Record<SkillId, ContentSkill> = {
   SHORT_VIDEO,
   LONG_VIDEO,
   INSTAGRAM,
+  RESEARCH,
 }
 
 export const SKILL_LIST = [SHORT_VIDEO, LONG_VIDEO, INSTAGRAM]
+export const ALL_SKILLS = [SHORT_VIDEO, LONG_VIDEO, INSTAGRAM, RESEARCH]
