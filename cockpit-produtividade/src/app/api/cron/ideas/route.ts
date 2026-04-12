@@ -37,7 +37,7 @@ Pesquise as tendências, notícias e assuntos mais quentes e relevantes HOJE sob
 Gere ideias distribuídas IGUALMENTE entre os termos.
 
 IMPORTANTE: O campo "term" DEVE ser EXATAMENTE um destes valores:
-${terms.map((t) => `- "${t.term}"`).join("\n")}
+${terms.map((t) => `- "${t}"`).join("\n")}
 
 Retorne APENAS um JSON array:
 [{
@@ -59,7 +59,7 @@ Retorne APENAS um JSON array:
       const ideas = JSON.parse(result.replace(/```json?\n?/g, "").replace(/```/g, "").trim())
 
       // Force match terms
-      const termNames = terms.map((t) => t.term)
+      const termNames = terms
       const validIdeas = ideas.filter((i: any) => i.title && i.summary).map((i: any) => {
         let matched = termNames.find((t) => t === i.term)
         if (!matched) matched = termNames.find((t) => i.title?.toLowerCase().includes(t.toLowerCase().split(/\s+/)[0])) || termNames[0]
