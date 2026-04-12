@@ -98,11 +98,18 @@ export function ConteudoClient({ initialContents, areas }: Props) {
 
   async function handleGenerateIdeas() {
     setGeneratingIdeas(true)
-    const res = await generateIdeasNowAction()
-    // Always reload ideas after generation attempt
-    const ideasRes = await getIdeasAction()
-    if (ideasRes.success) setIdeaFeed(ideasRes.data as any[])
-    if (!res.success) console.error("Erro ao gerar ideias:", res.error)
+    try {
+      const res = await fetch("/api/content/ideas", { method: "POST" })
+      if (res.ok) {
+        const data = await res.json()
+        setIdeaFeed(data.ideas ?? [])
+      } else {
+        const err = await res.json()
+        console.error("Erro ao gerar ideias:", err.error)
+      }
+    } catch (err) {
+      console.error("Erro de conexão:", err)
+    }
     setGeneratingIdeas(false)
   }
 
@@ -365,8 +372,8 @@ export function ConteudoClient({ initialContents, areas }: Props) {
         <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1 w-fit">
           {([
             { key: "overview" as Tab, label: "Visão Geral", icon: BarChart3 },
-            { key: "pipeline" as Tab, label: "Pipeline", icon: Workflow },
             { key: "ideas" as Tab, label: "Repositório de Ideias", icon: Lightbulb },
+            { key: "pipeline" as Tab, label: "Pipeline", icon: Workflow },
             { key: "skills" as Tab, label: "Skills & Boas Práticas", icon: BookOpen },
           ]).map(({ key, label, icon: Icon }) => (
             <button key={key} onClick={() => setTab(key)} className={cn(
@@ -605,14 +612,23 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                   <div key={idea.id} className="cockpit-card !p-0 group hover:border-accent/30 transition-colors">
                     <div className="px-5 py-4">
                       <div className="flex items-start gap-3">
+                        {/* Score badge */}
+                        <div className={cn("w-11 h-11 rounded-xl flex flex-col items-center justify-center flex-shrink-0 border",
+                          idea.score >= 97 ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-500" :
+                          idea.score >= 94 ? "bg-accent/15 border-accent/30 text-accent" :
+                          "bg-amber-500/15 border-amber-500/30 text-amber-500"
+                        )}>
+                          <span className="text-sm font-bold leading-none">{idea.score || 90}</span>
+                        </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-cockpit-text">{idea.title}</p>
                           <p className="text-xs text-cockpit-muted mt-1 line-clamp-2">{idea.summary}</p>
                           <div className="flex flex-wrap items-center gap-2 mt-2">
                             {idea.term && <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent">{idea.term}</span>}
+                            {idea.source && idea.source !== "ai_research" && idea.source !== "ai_generated" && idea.source !== "cron" && <span className="text-[10px] text-cockpit-muted">📰 {idea.source}</span>}
                             {idea.angle && <span className="text-[10px] text-cockpit-muted">💡 {idea.angle}</span>}
-                            {idea.relevance && <span className="text-[10px] text-cockpit-muted">📈 {idea.relevance}</span>}
                           </div>
+                          {idea.relevance && <p className="text-[10px] text-cockpit-muted mt-1.5">📈 {idea.relevance}</p>}
                           {idea.hook && <p className="text-xs text-cockpit-muted mt-2 italic border-l-2 border-accent/30 pl-2">Hook: "{idea.hook}"</p>}
                         </div>
                         <div className="flex flex-col gap-1.5 flex-shrink-0">

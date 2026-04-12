@@ -428,6 +428,7 @@ model IdeaFeed {
   relevance   String?
   hook        String?
   term        String
+  score       Int      @default(90)
   isUsed      Boolean  @default(false)
   isDiscarded Boolean  @default(false)
   createdAt   DateTime @default(now())

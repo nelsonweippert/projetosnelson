@@ -43,7 +43,9 @@ Retorne APENAS um JSON array:
   "angle": "ângulo único para abordar",
   "hook": "sugestão de hook",
   "term": "termo principal relacionado",
-  "relevance": "por que é tendência agora"
+  "relevance": "por que é tendência agora",
+  "source": "fonte da informação",
+  "score": 95
 }]`
 
       const result = await generateContentSuggestion(
@@ -61,7 +63,8 @@ Retorne APENAS um JSON array:
           hook: idea.hook || null,
           term: idea.term || allTerms,
           relevance: idea.relevance || null,
-          source: "cron",
+          source: idea.source || "cron",
+          score: Math.min(100, Math.max(90, idea.score || 90)),
           userId,
         })),
       })
