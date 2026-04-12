@@ -79,6 +79,12 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
     })
   }
 
+  // Save sem transition — para auto-saves da IA que precisam ser imediatos
+  async function saveNow(data: Record<string, unknown>) {
+    const result = await updateContentAction(content.id, data)
+    if (result.success) onUpdate(result.data as Content)
+  }
+
   function handlePhaseChange(phase: ContentPhase) {
     startTransition(async () => { const r = await advanceContentPhaseAction(content.id, phase); if (r.success) onUpdate(r.data as Content) })
   }
@@ -109,23 +115,25 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
           const result = data.result
           setAiResult(result)
           // Auto-save text results to the corresponding field
-          const autoSaveMap: Record<string, [string, (v: string) => void, string]> = {
-            generate_script: ["script", setScript, "script"],
-            generate_description: ["description", setDescription, "description"],
-            generate_thumbnail: ["thumbnailNotes", setThumbnailNotes, "thumbnailNotes"],
-            generate_editing_notes: ["notes", setNotes, "notes"],
+          const autoSaveMap: Record<string, [string, (v: string) => void]> = {
+            generate_script: ["script", setScript],
+            generate_description: ["description", setDescription],
+            generate_thumbnail: ["thumbnailNotes", setThumbnailNotes],
+            generate_editing_notes: ["notes", setNotes],
           }
           const mapping = autoSaveMap[action]
           if (mapping) {
             const [dbField, setter] = mapping
             setter(result)
-            save({ [dbField]: result })
+            await saveNow({ [dbField]: result })
           } else if (action === "deep_research" || action === "generate_research") {
             if (research.trim()) {
               const combined = `${research}\n\n---\n\n${result}`
-              setResearch(combined); save({ research: combined })
+              setResearch(combined)
+              await saveNow({ research: combined })
             } else {
-              setResearch(result); save({ research: result })
+              setResearch(result)
+              await saveNow({ research: result })
             }
           }
         }
@@ -134,9 +142,9 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
     setAiLoading(null); setAiConsideration("")
   }, [content.skill, content.phase, title, hook, script, notes, research, targetDuration])
 
-  function selectOption(opt: any) {
-    if (aiField === "hook") { setHook(opt.text); save({ hook: opt.text }) }
-    else if (aiField === "title") { setTitle(opt.text); save({ title: opt.text }) }
+  async function selectOption(opt: any) {
+    if (aiField === "hook") { setHook(opt.text); await saveNow({ hook: opt.text }) }
+    else if (aiField === "title") { setTitle(opt.text); await saveNow({ title: opt.text }) }
     setAiOptions(null); setAiField(null)
   }
 
@@ -317,7 +325,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
                 {ELAB_SECTIONS.map((s) => {
                   const hasContent = s === "hook" ? !!hook : s === "roteiro" ? !!script : s === "titulo" ? true : s === "thumbnail" ? !!thumbnailNotes : !!description
                   return (
-                    <button key={s} onClick={() => setActiveSection(s)}
+                    <button key={s} onClick={() => { setActiveSection(s); setAiResult(null); setAiOptions(null) }}
                       className={cn("px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1",
                         activeSection === s ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
                       {ELAB_LABEL[s]}
