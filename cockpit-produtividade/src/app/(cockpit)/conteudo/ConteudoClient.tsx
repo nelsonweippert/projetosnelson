@@ -606,7 +606,12 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                     Todos <span className="text-[10px] opacity-70 ml-1">{ideaFeed.filter((i) => !i.isUsed).length}</span>
                   </button>
                   {monitorTerms.filter((t: any) => t.isActive).map((t: any) => {
-                    const count = ideaFeed.filter((i: any) => !i.isUsed && i.term?.toLowerCase().includes(t.term.toLowerCase())).length
+                    const termWords = t.term.toLowerCase().split(/\s+/)
+                    const count = ideaFeed.filter((i: any) => {
+                      if (i.isUsed) return false
+                      const ideaText = `${i.term || ""} ${i.title || ""}`.toLowerCase()
+                      return termWords.some((w: string) => w.length > 2 && ideaText.includes(w))
+                    }).length
                     return (
                       <button key={t.id} onClick={() => setIdeaTermFilter(t.term)} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", ideaTermFilter === t.term ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
                         {t.term} <span className="text-[10px] opacity-70 ml-1">{count}</span>
@@ -630,7 +635,12 @@ export function ConteudoClient({ initialContents, areas }: Props) {
               <div className="space-y-2">
                 {ideaFeed
                   .filter((i: any) => showUsedIdeas ? true : !i.isUsed)
-                  .filter((i: any) => ideaTermFilter === "ALL" || i.term?.toLowerCase().includes(ideaTermFilter.toLowerCase()))
+                  .filter((i: any) => {
+                    if (ideaTermFilter === "ALL") return true
+                    const filterWords = ideaTermFilter.toLowerCase().split(/\s+/)
+                    const ideaText = `${i.term || ""} ${i.title || ""}`.toLowerCase()
+                    return filterWords.some((w: string) => w.length > 2 && ideaText.includes(w))
+                  })
                   .map((idea: any) => (
                   <div key={idea.id} className={cn("cockpit-card !p-0 group transition-colors", idea.isUsed ? "opacity-60" : "hover:border-accent/30")}>
                     <div className="px-5 py-4">
