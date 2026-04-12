@@ -610,7 +610,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                     const count = ideaFeed.filter((i: any) => {
                       if (i.isUsed) return false
                       const ideaText = `${i.term || ""} ${i.title || ""}`.toLowerCase()
-                      return termWords.some((w: string) => w.length > 2 && ideaText.includes(w))
+                      return termWords.some((w: string) => w.length >= 2 && ideaText.includes(w))
                     }).length
                     return (
                       <button key={t.id} onClick={() => setIdeaTermFilter(t.term)} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", ideaTermFilter === t.term ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
@@ -639,7 +639,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                     if (ideaTermFilter === "ALL") return true
                     const filterWords = ideaTermFilter.toLowerCase().split(/\s+/)
                     const ideaText = `${i.term || ""} ${i.title || ""}`.toLowerCase()
-                    return filterWords.some((w: string) => w.length > 2 && ideaText.includes(w))
+                    return filterWords.some((w: string) => w.length >= 2 && ideaText.includes(w))
                   })
                   .map((idea: any) => (
                   <div key={idea.id} className={cn("cockpit-card !p-0 group transition-colors", idea.isUsed ? "opacity-60" : "hover:border-accent/30")}>
