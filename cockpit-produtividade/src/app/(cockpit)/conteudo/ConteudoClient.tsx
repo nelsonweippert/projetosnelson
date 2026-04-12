@@ -74,6 +74,8 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   const [newTerm, setNewTerm] = useState("")
   const [generatingIdeas, setGeneratingIdeas] = useState(false)
   const [ideaSkillPick, setIdeaSkillPick] = useState<{ idea: any; picking: boolean } | null>(null)
+  const [ideaTermFilter, setIdeaTermFilter] = useState<string>("ALL")
+  const [showUsedIdeas, setShowUsedIdeas] = useState(false)
 
   useEffect(() => {
     if (tab === "ideas" && !ideasLoaded) {
@@ -595,10 +597,29 @@ export function ConteudoClient({ initialContents, areas }: Props) {
               <p className="text-[10px] text-cockpit-muted mt-2">O sistema busca tendências diariamente às 8h com base nesses termos.</p>
             </div>
 
-            {/* Ideas feed */}
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-cockpit-muted">{ideaFeed.filter((i) => !i.isUsed).length} ideias disponíveis</p>
-            </div>
+            {/* Filters */}
+            {ideaFeed.length > 0 && (() => {
+              const allTermsInFeed = [...new Set(ideaFeed.map((i: any) => i.term).filter(Boolean))]
+              const availableCount = ideaFeed.filter((i) => !i.isUsed).length
+              const usedCount = ideaFeed.filter((i) => i.isUsed).length
+              return (
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1">
+                    <button onClick={() => setIdeaTermFilter("ALL")} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", ideaTermFilter === "ALL" ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
+                      Todos <span className="text-[10px] opacity-70 ml-1">{availableCount}</span>
+                    </button>
+                    {allTermsInFeed.map((term: string) => (
+                      <button key={term} onClick={() => setIdeaTermFilter(term)} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", ideaTermFilter === term ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
+                        {term} <span className="text-[10px] opacity-70 ml-1">{ideaFeed.filter((i: any) => i.term === term && !i.isUsed).length}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => setShowUsedIdeas(!showUsedIdeas)} className={cn("px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors", showUsedIdeas ? "border-accent/30 bg-accent/10 text-accent" : "border-cockpit-border text-cockpit-muted hover:text-cockpit-text")}>
+                    {showUsedIdeas ? "Esconder" : "Mostrar"} usadas <span className="text-[10px] opacity-70 ml-1">{usedCount}</span>
+                  </button>
+                </div>
+              )
+            })()}
 
             {ideaFeed.length === 0 ? (
               <div className="cockpit-card flex flex-col items-center justify-center py-16 text-cockpit-muted">
@@ -608,8 +629,11 @@ export function ConteudoClient({ initialContents, areas }: Props) {
               </div>
             ) : (
               <div className="space-y-2">
-                {ideaFeed.filter((i) => !i.isUsed).map((idea: any) => (
-                  <div key={idea.id} className="cockpit-card !p-0 group hover:border-accent/30 transition-colors">
+                {ideaFeed
+                  .filter((i: any) => showUsedIdeas ? true : !i.isUsed)
+                  .filter((i: any) => ideaTermFilter === "ALL" || i.term === ideaTermFilter)
+                  .map((idea: any) => (
+                  <div key={idea.id} className={cn("cockpit-card !p-0 group transition-colors", idea.isUsed ? "opacity-60" : "hover:border-accent/30")}>
                     <div className="px-5 py-4">
                       <div className="flex items-start gap-3">
                         {/* Score badge */}
@@ -632,7 +656,9 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                           {idea.hook && <p className="text-xs text-cockpit-muted mt-2 italic border-l-2 border-accent/30 pl-2">Hook: "{idea.hook}"</p>}
                         </div>
                         <div className="flex flex-col gap-1.5 flex-shrink-0">
-                          {ideaSkillPick?.idea?.id === idea.id ? (
+                          {idea.isUsed ? (
+                            <span className="px-3 py-1.5 text-[11px] font-medium text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">✓ Usado</span>
+                          ) : ideaSkillPick?.idea?.id === idea.id ? (
                             <div className="flex flex-col gap-1">
                               {SKILL_LIST.map((s) => (
                                 <button key={s.id} onClick={() => handleCreateFromIdea(idea, s.id)} disabled={isPending}
