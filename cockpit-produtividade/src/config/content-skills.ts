@@ -53,7 +53,7 @@ const SHORT_VIDEO: ContentSkill = {
   id: "SHORT_VIDEO",
   label: "Vídeo Curto",
   icon: "⚡",
-  description: "TikTok, YouTube Shorts, Instagram Reels (15s–90s)",
+  description: "TikTok, YouTube Shorts, Instagram Reels (30s–3min)",
   platforms: ["TIKTOK", "YOUTUBE", "INSTAGRAM"],
   phases: [
     {
@@ -66,10 +66,10 @@ const SHORT_VIDEO: ContentSkill = {
         { label: "Ângulo único definido (o que diferencia este vídeo?)", tip: "Mesmo tema popular precisa de ângulo original" },
         { label: "Hook de 3 segundos rascunhado", tip: "O hook decide 90% da performance" },
         { label: "Formato escolhido (tutorial, storytelling, POV, antes/depois, lista)" },
-        { label: "Duração alvo definida (15s, 30s ou 60s)" },
+        { label: "Duração alvo definida (30s, 60s, 1:30, 2:00 ou 3:00)" },
       ],
       tips: [
-        "Vídeos de 30-60 segundos são o sweet spot: maximizam conclusão e retenção (dados 2026)",
+        "Vídeos curtos vão de 30s a 3min. Sweet spot: 60-90s para máxima retenção. 1:30-3:00 para conteúdo educacional denso",
         "71% dos viewers decidem nos primeiros segundos se continuam — hook é tudo",
         "Use 'curiosity stacking': assim que uma pergunta é respondida, outra emerge (mantém até o final)",
         "Cross-platform é obrigatório: publicar em 3-5 plataformas dá 4-5x mais alcance total",
@@ -553,7 +553,7 @@ const INSTAGRAM: ContentSkill = {
   id: "INSTAGRAM",
   label: "Instagram",
   icon: "📸",
-  description: "Carrosséis, Reels, Stories e Posts estáticos",
+  description: "Carrosséis, Reels (30s–3min), Stories e Posts",
   platforms: ["INSTAGRAM"],
   phases: [
     {
@@ -687,7 +687,7 @@ const INSTAGRAM: ContentSkill = {
     "Keywords em captions > hashtags para descoberta (Instagram confirmou em 2025)",
     "Cadência por tamanho: <10K = 2-3 Reels + 1 carrossel/semana. 10-100K = 1-2 Reels + 2-3 carrosséis. >100K = 1 Reel + 3-4 carrosséis",
     "Reposte top carrosséis a cada 6-8 semanas — são ativos renováveis, não one-shot",
-    "Reels 30-90s performam melhor para educação. 7-15s para trends virais",
+    "Reels 60s-3min performam melhor para educação. 30s para trends virais. Formato de até 3min é o padrão em 2026",
     "Consistência visual (brand templates) = reconhecimento instantâneo no feed",
     "Stories diários mantêm você no topo do feed (story ring)",
     "Primeiros 30 min são críticos — engajamento rápido = Explore page",

@@ -220,8 +220,8 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   // ── Duration presets ──────────────────────────────────────────────────
 
   const durationPresets = content.skill === "LONG_VIDEO"
-    ? [{ l: "8 min", v: 480 }, { l: "10 min", v: 600 }, { l: "15 min", v: 900 }, { l: "20 min", v: 1200 }, { l: "25 min", v: 1500 }]
-    : [{ l: "15s", v: 15 }, { l: "30s", v: 30 }, { l: "60s", v: 60 }, { l: "90s", v: 90 }]
+    ? [{ l: "8 min", v: 480 }, { l: "10 min", v: 600 }, { l: "15 min", v: 900 }, { l: "20 min", v: 1200 }, { l: "25 min", v: 1500 }, { l: "30 min", v: 1800 }]
+    : [{ l: "30s", v: 30 }, { l: "60s", v: 60 }, { l: "1:30", v: 90 }, { l: "2:00", v: 120 }, { l: "2:30", v: 150 }, { l: "3:00", v: 180 }]
 
   // ── Render ─────────────────────────────────────────────────────────────
 

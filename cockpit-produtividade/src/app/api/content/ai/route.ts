@@ -33,7 +33,13 @@ export async function POST(req: NextRequest) {
     if (!s) return "não definida"
     return s >= 60 ? `${Math.floor(s / 60)} minutos${s % 60 > 0 ? ` e ${s % 60} segundos` : ""}` : `${s} segundos`
   }
-  const durationCtx = targetDuration ? `\n- Duração alvo: ${formatDuration(targetDuration)} — ADAPTE todo o conteúdo para caber nesta duração` : ""
+  const isShortContent = skill === "SHORT_VIDEO" || skill === "INSTAGRAM"
+  const durationCtx = targetDuration
+    ? `\n- Duração alvo: ${formatDuration(targetDuration)} — ${isShortContent
+      ? "CONTEÚDO CURTO: ritmo rápido, cortes a cada 2-3s, hooks de 1-3s, sem enrolação. Cada segundo conta."
+      : "CONTEÚDO LONGO: estruture com capítulos, use open loops a cada 3-4 min, pattern interrupts a cada 30-60s."
+    } ADAPTE o roteiro para caber EXATAMENTE nesta duração.`
+    : ""
 
   const skillConfig = skill ? CONTENT_SKILLS[skill] : null
   const phaseConfig = skillConfig?.phases.find((p) => p.id === phase)
