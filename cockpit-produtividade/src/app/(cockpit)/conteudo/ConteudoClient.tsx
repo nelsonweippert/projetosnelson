@@ -625,9 +625,14 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                       )
                     })}
                   </div>
-                  <button onClick={() => setShowUsedIdeas(!showUsedIdeas)} className={cn("px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors", showUsedIdeas ? "border-accent/30 bg-accent/10 text-accent" : "border-cockpit-border text-cockpit-muted hover:text-cockpit-text")}>
-                    {showUsedIdeas ? "Esconder" : "Mostrar"} usadas <span className="text-[10px] opacity-70 ml-1">{ideaFeed.filter((i) => i.isUsed).length}</span>
-                  </button>
+                  {(() => {
+                    const usedWithContent = ideaFeed.filter((i: any) => i.isUsed && contents.some((c: Content) => c.ideaFeedId === i.id || c.title === i.title)).length
+                    return usedWithContent > 0 ? (
+                      <button onClick={() => setShowUsedIdeas(!showUsedIdeas)} className={cn("px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors", showUsedIdeas ? "border-accent/30 bg-accent/10 text-accent" : "border-cockpit-border text-cockpit-muted hover:text-cockpit-text")}>
+                        {showUsedIdeas ? "Esconder" : "Em produção"} <span className="text-[10px] opacity-70 ml-1">{usedWithContent}</span>
+                      </button>
+                    ) : null
+                  })()}
                 </div>
               )
             })()}
@@ -641,7 +646,18 @@ export function ConteudoClient({ initialContents, areas }: Props) {
             ) : (
               <div className="space-y-2">
                 {ideaFeed
-                  .filter((i: any) => showUsedIdeas ? true : !i.isUsed)
+                  .filter((i: any) => {
+                    if (showUsedIdeas) return true
+                    if (i.isUsed) return false
+                    return true
+                  })
+                  .filter((i: any) => {
+                    // When showing used, only show those with content in pipeline
+                    if (i.isUsed) {
+                      return contents.some((c: Content) => c.ideaFeedId === i.id || c.title === i.title)
+                    }
+                    return true
+                  })
                   .filter((i: any) => !ideaTermFilter || i.term === ideaTermFilter)
                   .map((idea: any) => (
                   <div key={idea.id} className={cn("cockpit-card !p-0 group transition-colors", idea.isUsed ? "opacity-60" : "hover:border-accent/30")}>
@@ -667,9 +683,17 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                           {idea.hook && <p className="text-xs text-cockpit-muted mt-2 italic border-l-2 border-accent/30 pl-2">Hook: "{idea.hook}"</p>}
                         </div>
                         <div className="flex flex-col gap-1.5 flex-shrink-0">
-                          {idea.isUsed ? (
-                            <span className="px-3 py-1.5 text-[11px] font-medium text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">✓ Usado</span>
-                          ) : ideaSkillPick?.idea?.id === idea.id ? (
+                          {idea.isUsed ? (() => {
+                            const linkedContent = contents.find((c: Content) => c.ideaFeedId === idea.id || c.title === idea.title)
+                            return linkedContent ? (
+                              <button onClick={() => setSelectedContent(linkedContent)}
+                                className="px-3 py-1.5 text-[11px] font-medium text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-colors">
+                                ✓ Ver conteúdo
+                              </button>
+                            ) : (
+                              <span className="px-3 py-1.5 text-[11px] font-medium text-cockpit-muted bg-cockpit-border-light rounded-lg">Sem conteúdo</span>
+                            )
+                          })() : ideaSkillPick?.idea?.id === idea.id ? (
                             <div className="flex flex-col gap-1">
                               {SKILL_LIST.map((s) => (
                                 <button key={s.id} onClick={() => handleCreateFromIdea(idea, s.id)} disabled={isPending}
