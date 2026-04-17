@@ -378,36 +378,85 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
 
             {/* ═══ BRIEFING (resumo para gravação) ═══ */}
             {content.phase === "BRIEFING" && (<>
-              <div className="flex items-center gap-2 mb-2">
-                <ClipboardList size={18} className="text-amber-500" />
-                <h2 className="text-sm font-bold text-cockpit-text">Briefing para Gravação</h2>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <ClipboardList size={18} className="text-amber-500" />
+                  <div>
+                    <h2 className="text-sm font-bold text-cockpit-text">Briefing para Gravação</h2>
+                    <p className="text-[10px] text-cockpit-muted">Guia estruturado com frases de destaque por bloco</p>
+                  </div>
+                </div>
+                <AiBtn action="generate_briefing" label="Gerar briefing com IA" />
               </div>
-              <p className="text-xs text-cockpit-muted mb-4">Resumo de tudo que foi elaborado. Use como guia durante a gravação.</p>
 
-              <div className="space-y-3">
-                <BriefItem label="Título" value={title} icon="🎯" />
-                <BriefItem label="Hook — primeiros segundos" value={hook} icon="🎣" />
+              <AiPanel acceptField="notes" />
 
+              {/* Quick info bar */}
+              <div className="flex flex-wrap gap-3 p-3 bg-cockpit-bg border border-cockpit-border rounded-xl">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-cockpit-muted">🎯</span>
+                  <span className="text-xs font-semibold text-cockpit-text">{title}</span>
+                </div>
                 {targetDuration > 0 && (
-                  <div className="p-4 bg-cockpit-bg border border-cockpit-border rounded-xl">
-                    <p className="text-[10px] text-cockpit-muted font-medium uppercase tracking-wider mb-1.5">⏱️ Duração alvo</p>
-                    <p className="text-lg font-bold text-accent">{targetDuration >= 60 ? `${Math.floor(targetDuration / 60)} min${targetDuration % 60 > 0 ? ` ${targetDuration % 60}s` : ""}` : `${targetDuration}s`}</p>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-cockpit-muted">⏱️</span>
+                    <span className="text-xs font-bold text-accent">{targetDuration >= 60 ? `${Math.floor(targetDuration / 60)}min` : `${targetDuration}s`}</span>
                   </div>
                 )}
-
-                <BriefItem label="Roteiro" value={script} icon="📝" />
-                <BriefItem label="Thumbnail / Arte" value={thumbnailNotes} icon="🖼️" />
-                <BriefItem label="Descrição / Caption" value={description} icon="📋" />
-
-                {research && (
-                  <details className="rounded-xl border border-cockpit-border overflow-hidden">
-                    <summary className="px-4 py-3 text-xs font-medium text-cockpit-muted cursor-pointer hover:bg-cockpit-surface-hover">📚 Pesquisa & Referências (clique para expandir)</summary>
-                    <div className="px-4 py-3 border-t border-cockpit-border text-xs text-cockpit-muted whitespace-pre-wrap max-h-48 overflow-y-auto">{research}</div>
-                  </details>
-                )}
+                {skill && <span className="text-[10px] text-cockpit-muted">{skill.icon} {skill.label}</span>}
               </div>
 
-              <Field label="Notas adicionais para gravação" value={notes} onChange={setNotes} field="notes" placeholder="Ângulos de câmera, cenário, figurino, props..." rows={4} />
+              {/* Hook */}
+              {hook && (
+                <div className="p-4 bg-amber-500/5 border border-amber-500/15 rounded-xl">
+                  <p className="text-[10px] text-amber-500 font-semibold uppercase tracking-wider mb-1">🎣 Hook — abra com isso</p>
+                  <p className="text-sm font-medium text-cockpit-text italic">"{hook}"</p>
+                </div>
+              )}
+
+              {/* Briefing content (AI-generated or manual notes) */}
+              {notes ? (
+                <div className="p-4 bg-cockpit-bg border border-cockpit-border rounded-xl">
+                  <p className="text-[10px] text-cockpit-muted font-semibold uppercase tracking-wider mb-3">📋 Briefing estruturado</p>
+                  <div className="text-sm text-cockpit-text whitespace-pre-wrap leading-relaxed prose-sm max-w-none
+                    [&_strong]:text-accent [&_strong]:font-bold
+                    [&_h1]:text-base [&_h1]:font-bold [&_h1]:text-cockpit-text [&_h1]:mt-4 [&_h1]:mb-2
+                    [&_h2]:text-sm [&_h2]:font-bold [&_h2]:text-cockpit-text [&_h2]:mt-3 [&_h2]:mb-1.5
+                    [&_h3]:text-xs [&_h3]:font-bold [&_h3]:text-cockpit-text [&_h3]:mt-2 [&_h3]:mb-1">
+                    {notes}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-8 border-2 border-dashed border-cockpit-border rounded-xl text-center text-cockpit-muted">
+                  <ClipboardList size={24} strokeWidth={1} className="mx-auto mb-2" />
+                  <p className="text-xs">Clique "Gerar briefing com IA" para criar o guia estruturado</p>
+                  <p className="text-[10px] mt-1">Cada bloco terá uma frase de destaque que não pode faltar</p>
+                </div>
+              )}
+
+              {/* Roteiro completo (colapsável) */}
+              {script && (
+                <details className="rounded-xl border border-cockpit-border overflow-hidden">
+                  <summary className="px-4 py-3 text-xs font-medium text-cockpit-muted cursor-pointer hover:bg-cockpit-surface-hover">📝 Roteiro completo (referência)</summary>
+                  <div className="px-4 py-3 border-t border-cockpit-border text-sm text-cockpit-text whitespace-pre-wrap font-mono text-[13px] max-h-64 overflow-y-auto">{script}</div>
+                </details>
+              )}
+
+              {/* Descrição (colapsável) */}
+              {description && (
+                <details className="rounded-xl border border-cockpit-border overflow-hidden">
+                  <summary className="px-4 py-3 text-xs font-medium text-cockpit-muted cursor-pointer hover:bg-cockpit-surface-hover">📋 Descrição / Caption</summary>
+                  <div className="px-4 py-3 border-t border-cockpit-border text-xs text-cockpit-muted whitespace-pre-wrap max-h-32 overflow-y-auto">{description}</div>
+                </details>
+              )}
+
+              {/* Research (colapsável) */}
+              {research && (
+                <details className="rounded-xl border border-cockpit-border overflow-hidden">
+                  <summary className="px-4 py-3 text-xs font-medium text-cockpit-muted cursor-pointer hover:bg-cockpit-surface-hover">📚 Pesquisa & Referências</summary>
+                  <div className="px-4 py-3 border-t border-cockpit-border text-xs text-cockpit-muted whitespace-pre-wrap max-h-48 overflow-y-auto">{research}</div>
+                </details>
+              )}
             </>)}
 
             {/* ═══ EM EDIÇÃO ═══ */}

@@ -145,6 +145,31 @@ Sugira um plano de pesquisa completo:
 5. Ângulos únicos que poucos criadores exploram`
       break
 
+    case "generate_briefing":
+      prompt = `Você é um diretor de conteúdo que prepara briefings para gravação.
+
+Tipo: ${skillConfig?.label ?? "Geral"}
+Título: ${title ?? "Não definido"}${durationCtx}
+${hook ? `Hook: ${hook}` : ""}
+${script ? `\nROTEIRO COMPLETO:\n${script}` : ""}
+${research ? `\nPESQUISA:\n${research.substring(0, 1000)}` : ""}
+
+Crie um BRIEFING DE GRAVAÇÃO estruturado em blocos. Para cada bloco:
+
+1. **Nome do bloco** (ABERTURA, DESENVOLVIMENTO 1, DESENVOLVIMENTO 2, etc., FECHAMENTO)
+2. **O que falar neste bloco** — resumo em 2-3 frases do ponto principal
+3. **⭐ FRASE DE DESTAQUE** — a frase mais impactante que NÃO PODE FALTAR neste bloco. É o ponto-chave que faz o espectador parar, reagir ou compartilhar. Deve ser memorável e viral.
+4. **Dica de entrega** — tom de voz, energia, gesto ou expressão facial para este momento
+
+A FRASE DE DESTAQUE de cada bloco deve:
+- Ser curta e impactante (máximo 2 frases)
+- Conter um dado chocante, uma verdade provocativa, ou uma analogia forte
+- Funcionar isolada como quote para cortes/reels
+- Seguir a estrutura lógica de viralização: hook → tensão → revelação → CTA
+
+Formate com markdown. Use **negrito** para as frases de destaque.`
+      break
+
     case "generate_editing_notes":
       prompt = `Você é um editor de vídeo profissional. Analise o roteiro abaixo e gere um GUIA DE EDIÇÃO completo.
 
