@@ -77,6 +77,8 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   const [ideaSkillPick, setIdeaSkillPick] = useState<{ idea: any; picking: boolean } | null>(null)
   const [ideaTermFilter, setIdeaTermFilter] = useState<string>("")
   const [showUsedIdeas, setShowUsedIdeas] = useState(false)
+  const [customIdeaInput, setCustomIdeaInput] = useState("")
+  const [customIdeaLoading, setCustomIdeaLoading] = useState(false)
 
   useEffect(() => {
     if (tab === "ideas" && !ideasLoaded) {
@@ -119,6 +121,23 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   async function handleDiscardIdea(id: string) {
     await discardIdeaAction(id)
     setIdeaFeed((p) => p.filter((i) => i.id !== id))
+  }
+
+  async function handleCustomIdea() {
+    if (!customIdeaInput.trim()) return
+    setCustomIdeaLoading(true)
+    try {
+      const res = await fetch("/api/content/ideas/custom", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: customIdeaInput }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.ideas) setIdeaFeed(data.ideas)
+      }
+    } catch {}
+    setCustomIdeaLoading(false)
+    setCustomIdeaInput("")
   }
 
   async function handleCreateFromIdea(idea: any, skillId: SkillId) {
@@ -605,6 +624,23 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                 </button>
               </div>
               <p className="text-[10px] text-cockpit-muted mt-2">O sistema busca tendências diariamente às 8h com base nesses termos.</p>
+            </div>
+
+            {/* Custom idea input */}
+            <div className="cockpit-card">
+              <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider mb-3">Avaliar ideia específica</h3>
+              <p className="text-[10px] text-cockpit-muted mb-3">Descreva uma ideia de conteúdo e a IA avaliará o potencial de viralização com 3 variações de ângulo.</p>
+              <div className="flex items-start gap-2">
+                <textarea value={customIdeaInput} onChange={(e) => setCustomIdeaInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleCustomIdea() } }}
+                  placeholder="Ex: Comparar DeepSeek R3 com GPT-5 para programadores, mostrando testes reais de código..."
+                  rows={2}
+                  className="flex-1 px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30 resize-none" />
+                <button onClick={handleCustomIdea} disabled={!customIdeaInput.trim() || customIdeaLoading}
+                  className="flex items-center gap-1.5 px-4 py-2.5 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover disabled:opacity-50 flex-shrink-0">
+                  {customIdeaLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Avaliar
+                </button>
+              </div>
             </div>
 
             {/* Filters */}
