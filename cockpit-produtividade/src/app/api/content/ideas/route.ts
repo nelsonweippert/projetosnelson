@@ -160,21 +160,49 @@ O campo "term" DEVE ser EXATAMENTE um destes: ${terms.map((t) => `"${t.term}"`).
 
 Score: 97-100 viral agora, 94-96 boa janela, 90-93 relevante.
 
-IMPORTANTE: No campo "source", inclua os NOMES das fontes reais E as manchetes originais que originaram a ideia.
-No campo "relevance", inclua links/referências de onde a editora pode ir buscar imagens e screenshots (sites PT-BR de preferência).
+REGRAS DE FORMATO:
+- Cada campo deve ser CURTO (máx 2 frases)
+- "summary": máximo 2 frases
+- "relevance": 1 frase com a fonte original
+- "source": apenas nome da fonte (ex: "Google News, Reddit")
+- "hook": 1 frase curta
+- NÃO escreva textos longos em nenhum campo
 
 Retorne APENAS JSON array:
-[{"title":"...","summary":"...","angle":"...","hook":"...","term":"...","relevance":"notícia original + sites PT-BR onde buscar imagens (Tecmundo, InfoMoney, G1, Canaltech, etc)","source":"Google News: 'manchete original' + Reddit: r/subreddit","score":95}]`
+[{"title":"...","summary":"resumo curto","angle":"ângulo curto","hook":"hook curto","term":"...","relevance":"fonte original","source":"Google News","score":95}]`
 
     const start = Date.now()
-    const message = await anthropic.messages.create({ model: "claude-sonnet-4-6", max_tokens: 4096, messages: [{ role: "user", content: prompt }] })
+    const message = await anthropic.messages.create({ model: "claude-sonnet-4-6", max_tokens: 8192, messages: [{ role: "user", content: prompt }] })
     trackUsage("generate_ideas", message.usage?.input_tokens ?? 0, message.usage?.output_tokens ?? 0, Date.now() - start, userId).catch(() => {})
     const text = message.content[0]
     if (text.type !== "text") return NextResponse.json({ error: "Erro IA" }, { status: 500 })
 
-    const clean = text.text.replace(/```json?\n?/g, "").replace(/```/g, "").trim()
+    let clean = text.text.replace(/```json?\n?/g, "").replace(/```/g, "").trim()
     let ideas: any[]
-    try { ideas = JSON.parse(clean) } catch { const m = clean.match(/\[[\s\S]*\]/); if (m) ideas = JSON.parse(m[0]); else return NextResponse.json({ error: "Erro parse" }, { status: 500 }) }
+    try {
+      ideas = JSON.parse(clean)
+    } catch {
+      // Try to extract array
+      const m = clean.match(/\[[\s\S]*\]/)
+      if (m) {
+        try { ideas = JSON.parse(m[0]) } catch {
+          // Truncated JSON — try to fix by closing open strings/objects
+          let fixable = m[0]
+          // Remove last incomplete object
+          const lastComplete = fixable.lastIndexOf("},")
+          if (lastComplete > 0) {
+            fixable = fixable.substring(0, lastComplete + 1) + "]"
+            try { ideas = JSON.parse(fixable) } catch {
+              return NextResponse.json({ error: "Erro ao processar resposta da IA (JSON truncado)" }, { status: 500 })
+            }
+          } else {
+            return NextResponse.json({ error: "Erro ao processar resposta da IA" }, { status: 500 })
+          }
+        }
+      } else {
+        return NextResponse.json({ error: "Resposta da IA não contém JSON válido" }, { status: 500 })
+      }
+    }
 
     // Force-match ALL ideas to monitored terms
     const termNames = terms.map((t) => t.term)
