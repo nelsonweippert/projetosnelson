@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import Anthropic from "@anthropic-ai/sdk"
+import { trackUsage } from "@/services/ai.service"
 
 export const maxDuration = 120
 
@@ -51,10 +52,12 @@ Retorne APENAS JSON array (sem markdown):
   "score": 95
 }]`
 
+    const start = Date.now()
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6", max_tokens: 2048,
       messages: [{ role: "user", content: prompt }],
     })
+    trackUsage("evaluate_idea", message.usage?.input_tokens ?? 0, message.usage?.output_tokens ?? 0, Date.now() - start, userId).catch(() => {})
 
     const text = message.content[0]
     if (text.type !== "text") return NextResponse.json({ error: "Erro IA" }, { status: 500 })

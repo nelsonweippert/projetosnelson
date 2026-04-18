@@ -28,6 +28,7 @@ model User {
   aiInsights     AiInsight[]
   calendarEvents CalendarEvent[]
   skillSources   SkillSource[]
+  apiUsage       ApiUsage[]
   monitorTerms   MonitorTerm[]
   ideaFeed       IdeaFeed[]
 
@@ -401,6 +402,28 @@ model CalendarEventArea {
 
   @@id([calendarEventId, areaId])
   @@map("calendar_event_areas")
+}
+
+// ========================================
+// API Usage — Tracking de uso e custos
+// ========================================
+
+model ApiUsage {
+  id         String   @id @default(cuid())
+  action     String
+  model      String   @default("claude-sonnet-4-6")
+  inputTokens  Int    @default(0)
+  outputTokens Int    @default(0)
+  costUsd    Float    @default(0)
+  durationMs Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, action])
+  @@map("api_usage")
 }
 
 // ========================================

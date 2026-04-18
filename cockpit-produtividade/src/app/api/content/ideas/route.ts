@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import Anthropic from "@anthropic-ai/sdk"
+import { trackUsage } from "@/services/ai.service"
 
 export const maxDuration = 120
 
@@ -158,7 +159,9 @@ No campo "relevance", inclua links/referências de onde a editora pode ir buscar
 Retorne APENAS JSON array:
 [{"title":"...","summary":"...","angle":"...","hook":"...","term":"...","relevance":"notícia original + sites PT-BR onde buscar imagens (Tecmundo, InfoMoney, G1, Canaltech, etc)","source":"Google News: 'manchete original' + Reddit: r/subreddit","score":95}]`
 
+    const start = Date.now()
     const message = await anthropic.messages.create({ model: "claude-sonnet-4-6", max_tokens: 4096, messages: [{ role: "user", content: prompt }] })
+    trackUsage("generate_ideas", message.usage?.input_tokens ?? 0, message.usage?.output_tokens ?? 0, Date.now() - start, userId).catch(() => {})
     const text = message.content[0]
     if (text.type !== "text") return NextResponse.json({ error: "Erro IA" }, { status: 500 })
 

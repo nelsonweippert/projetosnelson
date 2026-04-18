@@ -96,16 +96,43 @@ export async function generateModuleInsight(userId: string, module: "tasks" | "f
 }
 
 export async function generateContentSuggestion(systemPrompt: string, userPrompt: string): Promise<string> {
+  const start = Date.now()
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 2048,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   })
+  const durationMs = Date.now() - start
   const content = message.content[0]
   if (content.type !== "text") return "Erro ao gerar sugestão."
+
+  // Track usage (fire and forget)
+  const inputTokens = message.usage?.input_tokens ?? 0
+  const outputTokens = message.usage?.output_tokens ?? 0
+  trackUsage("content_suggestion", inputTokens, outputTokens, durationMs).catch(() => {})
+
   return content.text
 }
+
+// ── Usage tracking ─────────────────────────────────────────────────────
+
+// Sonnet pricing: $3/M input, $15/M output
+const PRICING = { input: 3 / 1_000_000, output: 15 / 1_000_000 }
+
+async function trackUsage(action: string, inputTokens: number, outputTokens: number, durationMs: number, userId?: string) {
+  const costUsd = (inputTokens * PRICING.input) + (outputTokens * PRICING.output)
+  try {
+    // Try to get userId from the most recent user if not provided
+    const uid = userId || (await db.user.findFirst({ select: { id: true } }))?.id
+    if (!uid) return
+    await db.apiUsage.create({
+      data: { action, model: "claude-sonnet-4-6", inputTokens, outputTokens, costUsd, durationMs, userId: uid },
+    })
+  } catch {}
+}
+
+export { trackUsage }
 
 export async function getAiInsights(userId: string) {
   return db.aiInsight.findMany({
