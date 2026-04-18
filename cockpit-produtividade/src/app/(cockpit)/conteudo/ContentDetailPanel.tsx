@@ -22,9 +22,9 @@ const PHASES: { id: ContentPhase; label: string; icon: React.ElementType }[] = [
   { id: "PUBLISHED", label: "Publicado", icon: Send },
 ]
 
-const ELAB_SECTIONS = ["hook", "roteiro", "titulo", "thumbnail", "descricao"] as const
+const ELAB_SECTIONS = ["pesquisa", "hook", "roteiro", "titulo", "thumbnail", "descricao"] as const
 type ElabSection = typeof ELAB_SECTIONS[number]
-const ELAB_LABEL: Record<ElabSection, string> = { hook: "Hook", roteiro: "Roteiro", titulo: "Título", thumbnail: "Thumbnail", descricao: "Descrição" }
+const ELAB_LABEL: Record<ElabSection, string> = { pesquisa: "Pesquisa", hook: "Hook", roteiro: "Roteiro", titulo: "Título", thumbnail: "Thumbnail", descricao: "Descrição" }
 
 interface Props {
   content: Content; areas: Area[]
@@ -52,7 +52,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
     } catch { return [] }
   })
 
-  const [activeSection, setActiveSection] = useState<ElabSection>("hook")
+  const [activeSection, setActiveSection] = useState<ElabSection>("pesquisa")
 
   // AI state — persists across sub-tab changes
   const [aiLoading, setAiLoading] = useState<string | null>(null)
@@ -303,7 +303,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
             {content.phase === "IDEATION" && (<>
               {/* Skill selector */}
               <div>
-                <p className="text-xs font-medium text-cockpit-muted mb-2">Tipo de conteúdo</p>
+                <p className="text-xs font-medium text-cockpit-muted mb-3">Selecione o tipo de conteúdo</p>
                 <div className="grid grid-cols-2 gap-2">
                   {SKILL_LIST.map((s) => {
                     const platformMap: Record<string, string> = { INSTAGRAM_REELS: "INSTAGRAM", YOUTUBE_SHORTS: "YOUTUBE", YOUTUBE_VIDEO: "YOUTUBE", TIKTOK_VIDEO: "TIKTOK" }
@@ -323,33 +323,32 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
                 </div>
               </div>
 
+              {/* Research base — why this idea was chosen */}
               {research && (
                 <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 overflow-hidden">
-                  <div className="px-4 py-2.5 border-b border-blue-500/15"><p className="text-xs font-semibold text-blue-400 flex items-center gap-1.5">📰 Base de referências</p></div>
-                  <div className="px-4 py-3 text-sm text-cockpit-text whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{research}</div>
+                  <div className="px-4 py-2.5 border-b border-blue-500/15">
+                    <p className="text-xs font-semibold text-blue-400 flex items-center gap-1.5">📰 Por que esta ideia foi escolhida</p>
+                  </div>
+                  <div className="px-4 py-3 text-sm text-cockpit-text whitespace-pre-wrap leading-relaxed">{research}</div>
                 </div>
               )}
-              <div>
-                <p className="text-xs font-medium text-cockpit-muted mb-2">Duração estimada</p>
-                <div className="flex flex-wrap gap-2">{durationPresets.map((p) => (
-                  <button key={p.v} onClick={() => { setTargetDuration(p.v); save({ targetDuration: p.v }) }}
-                    className={cn("px-4 py-2 rounded-xl text-sm font-medium border transition-all", targetDuration === p.v ? "bg-accent text-black border-accent" : "border-cockpit-border text-cockpit-muted hover:border-accent/30")}>{p.l}</button>
-                ))}</div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <AiBtn action="deep_research" label="Pesquisar mais sobre o tema" />
-                <AiBtn action="generate_hook" label="Gerar hooks" />
-              </div>
-              <AiPanel acceptField={aiAction === "generate_research" || aiAction === "deep_research" ? "research" : undefined} />
-              <Field label="Hook" value={hook} onChange={setHook} field="hook" placeholder="O gancho dos primeiros segundos..." rows={3} />
-              <Field label="Pesquisa & Referências" value={research} onChange={setResearch} field="research" placeholder="Links, dados, fontes..." rows={6} />
             </>)}
 
             {/* ═══ ELABORAÇÃO ═══ */}
             {content.phase === "ELABORATION" && (<>
+              {/* Duration */}
+              <div>
+                <p className="text-xs font-medium text-cockpit-muted mb-2">Duração estimada</p>
+                <div className="flex flex-wrap gap-2">{durationPresets.map((p) => (
+                  <button key={p.v} onClick={() => { setTargetDuration(p.v); save({ targetDuration: p.v }) }}
+                    className={cn("px-3 py-1.5 rounded-xl text-xs font-medium border transition-all", targetDuration === p.v ? "bg-accent text-black border-accent" : "border-cockpit-border text-cockpit-muted hover:border-accent/30")}>{p.l}</button>
+                ))}</div>
+              </div>
+
+              {/* Sub-sections */}
               <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
                 {ELAB_SECTIONS.map((s) => {
-                  const hasContent = s === "hook" ? !!hook : s === "roteiro" ? !!script : s === "titulo" ? true : s === "thumbnail" ? !!thumbnailNotes : !!description
+                  const hasContent = s === "pesquisa" ? !!research : s === "hook" ? !!hook : s === "roteiro" ? !!script : s === "titulo" ? true : s === "thumbnail" ? !!thumbnailNotes : !!description
                   return (
                     <button key={s} onClick={() => { setActiveSection(s); setAiResult(null); setAiOptions(null) }}
                       className={cn("px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1",
@@ -360,6 +359,12 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
                   )
                 })}
               </div>
+
+              {activeSection === "pesquisa" && (<>
+                <div className="flex flex-wrap gap-2"><AiBtn action="deep_research" label="Pesquisar mais sobre o tema" /></div>
+                <AiPanel acceptField="research" />
+                <Field label="Pesquisa & Referências" value={research} onChange={setResearch} field="research" placeholder="Links, dados, fontes, inspirações..." rows={10} />
+              </>)}
 
               {activeSection === "hook" && (<>
                 <div className="flex flex-wrap gap-2"><AiBtn action="generate_hook" label="Gerar hooks com IA" /></div>
