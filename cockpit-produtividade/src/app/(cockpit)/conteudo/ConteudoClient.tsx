@@ -79,6 +79,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   const [showUsedIdeas, setShowUsedIdeas] = useState(false)
   const [customIdeaInput, setCustomIdeaInput] = useState("")
   const [customIdeaLoading, setCustomIdeaLoading] = useState(false)
+  const [customIdeaTerm, setCustomIdeaTerm] = useState<string>("")
 
   useEffect(() => {
     if (tab === "ideas" && !ideasLoaded) {
@@ -129,7 +130,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
     try {
       const res = await fetch("/api/content/ideas/custom", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: customIdeaInput }),
+        body: JSON.stringify({ description: customIdeaInput, term: customIdeaTerm || undefined }),
       })
       if (res.ok) {
         const data = await res.json()
@@ -631,11 +632,28 @@ export function ConteudoClient({ initialContents, areas }: Props) {
             {/* Custom idea input */}
             <div className="cockpit-card">
               <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider mb-3">💡 Avaliar ideia específica</h3>
-              <p className="text-[10px] text-cockpit-muted mb-3">Descreva qualquer ideia de conteúdo — de qualquer nicho — e a IA avaliará o potencial com 3 variações. Pode ser relacionada aos temas monitorados ou totalmente nova.</p>
+              <p className="text-[10px] text-cockpit-muted mb-3">Selecione um tema monitorado para direcionar ou deixe livre para qualquer nicho.</p>
+
+              {/* Term selector */}
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                <button onClick={() => setCustomIdeaTerm("")}
+                  className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                    !customIdeaTerm ? "bg-accent/10 border-accent/30 text-accent" : "border-cockpit-border text-cockpit-muted hover:border-cockpit-text/30")}>
+                  Tema livre
+                </button>
+                {monitorTerms.filter((t: any) => t.isActive).map((t: any) => (
+                  <button key={t.id} onClick={() => setCustomIdeaTerm(t.term)}
+                    className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                      customIdeaTerm === t.term ? "bg-accent/10 border-accent/30 text-accent" : "border-cockpit-border text-cockpit-muted hover:border-cockpit-text/30")}>
+                    {t.term}
+                  </button>
+                ))}
+              </div>
+
               <div className="flex items-start gap-2">
                 <textarea value={customIdeaInput} onChange={(e) => setCustomIdeaInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleCustomIdea() } }}
-                  placeholder="Qualquer ideia... Ex: 'Receitas fit em 1 minuto', 'Como negociar salário na entrevista', 'Review do novo iPhone'..."
+                  placeholder={customIdeaTerm ? `Ideia dentro de "${customIdeaTerm}"... Ex: 'Comparar X com Y', 'Tutorial de Z'` : "Qualquer ideia... Ex: 'Receitas fit em 1 minuto', 'Review do novo iPhone'..."}
                   rows={2}
                   className="flex-1 px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30 resize-none" />
                 <button onClick={handleCustomIdea} disabled={!customIdeaInput.trim() || customIdeaLoading}

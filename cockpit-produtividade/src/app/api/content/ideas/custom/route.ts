@@ -12,19 +12,18 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
 
   const userId = session.user.id
-  const { description } = await req.json()
+  const { description, term: providedTerm } = await req.json()
   if (!description) return NextResponse.json({ error: "Descrição obrigatória" }, { status: 400 })
 
-  // Extract a short term from the description (first ~3 words)
-  const autoTerm = description.split(/\s+/).slice(0, 4).join(" ")
+  // Use provided term or extract from description
+  const autoTerm = providedTerm || description.split(/\s+/).slice(0, 4).join(" ")
 
   try {
     const prompt = `Você é um analista de conteúdo digital. O criador tem uma ideia específica e quer saber se vale a pena produzir.
 
 IDEIA DO CRIADOR:
 "${description}"
-
-IMPORTANTE: Esta ideia pode ser de QUALQUER nicho — não está limitada a nenhum tema específico.
+${providedTerm ? `\nTEMA MONITORADO: "${providedTerm}" — a ideia está dentro deste tema. Use "${providedTerm}" como term.` : "\nIMPORTANTE: Esta ideia pode ser de QUALQUER nicho — não está limitada a nenhum tema específico."}
 
 Analise PROFUNDAMENTE esta ideia e retorne EXATAMENTE 3 variações de conteúdo baseadas nela.
 
@@ -38,7 +37,7 @@ O score deve ser REALISTA:
 - 94-96: tema relevante com boa janela, público engajado
 - 90-93: tema interessante mas já saturado ou timing não ideal
 
-Use o campo "term" como uma TAG CURTA do tema (ex: "finanças pessoais", "receitas fit", "marketing digital").
+${providedTerm ? `Use "${providedTerm}" como term para todas as variações.` : 'Use o campo "term" como uma TAG CURTA do tema (ex: "finanças pessoais", "receitas fit", "marketing digital").'}
 
 Retorne APENAS JSON array (sem markdown):
 [{
