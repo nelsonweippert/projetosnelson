@@ -12,9 +12,18 @@ interface RawItem { title: string; url?: string; date?: string; source: string }
 
 // ── 1. Google News RSS ──────────────────────────────────────────────────
 
+async function resolveGoogleNewsUrl(gnUrl: string): Promise<string> {
+  try {
+    const res = await fetch(gnUrl, { redirect: "follow" })
+    return res.url || gnUrl
+  } catch {
+    return gnUrl
+  }
+}
+
 async function fetchGoogleNews(term: string): Promise<RawItem[]> {
   try {
-    const items: RawItem[] = []
+    const items: { title: string; gnLink: string; date?: string; sourceName?: string }[] = []
     for (const hl of ["pt-BR", "en"]) {
       const ceid = hl === "pt-BR" ? "BR:pt-419" : "US:en"
       const url = `https://news.google.com/rss/search?q=${encodeURIComponent(term)}&hl=${hl}&gl=${hl === "pt-BR" ? "BR" : "US"}&ceid=${ceid}`
@@ -23,25 +32,40 @@ async function fetchGoogleNews(term: string): Promise<RawItem[]> {
       const xml = await res.text()
       const re = /<item>([\s\S]*?)<\/item>/g
       let m
-      while ((m = re.exec(xml)) !== null && items.length < 12) {
+      while ((m = re.exec(xml)) !== null && items.length < 8) {
         const itemXml = m[1]
         const t = itemXml.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || itemXml.match(/<title>(.*?)<\/title>/)
         const d = itemXml.match(/<pubDate>(.*?)<\/pubDate>/)
         const linkMatch = itemXml.match(/<link>(.*?)<\/link>/)
-        // Google News RSS has source URL in <source url="..."> tag
-        const sourceUrlMatch = itemXml.match(/<source[^>]*url="([^"]*)"/)
-        const realUrl = sourceUrlMatch?.[1] || linkMatch?.[1]
         const sourceNameMatch = itemXml.match(/<source[^>]*>(.*?)<\/source>/)
-        const sourceName = sourceNameMatch?.[1]?.replace(/<[^>]*>/g, "").trim()
-        if (t) items.push({
-          title: t[1].replace(/<[^>]*>/g, "").trim(),
-          url: realUrl,
-          date: d?.[1],
-          source: sourceName ? `Google News (${sourceName})` : "Google News",
-        })
+        if (t && linkMatch) {
+          items.push({
+            title: t[1].replace(/<[^>]*>/g, "").trim(),
+            gnLink: linkMatch[1],
+            date: d?.[1],
+            sourceName: sourceNameMatch?.[1]?.replace(/<[^>]*>/g, "").trim(),
+          })
+        }
       }
     }
-    return items
+
+    // Resolve Google News redirects to get real article URLs (in parallel, limit 5)
+    const resolved = await Promise.all(items.slice(0, 5).map(async (item) => {
+      const realUrl = await resolveGoogleNewsUrl(item.gnLink)
+      return {
+        title: item.title,
+        url: realUrl,
+        date: item.date,
+        source: item.sourceName ? `${item.sourceName}` : "Google News",
+      } as RawItem
+    }))
+
+    // Add remaining without resolving (to save time)
+    for (let i = 5; i < items.length; i++) {
+      resolved.push({ title: items[i].title, url: items[i].gnLink, date: items[i].date, source: items[i].sourceName || "Google News" })
+    }
+
+    return resolved
   } catch { return [] }
 }
 
