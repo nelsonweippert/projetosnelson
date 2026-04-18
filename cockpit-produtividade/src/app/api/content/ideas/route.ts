@@ -140,6 +140,13 @@ export async function POST(req: NextRequest) {
     }
     if (userSources.length > 0) { ctx += "\n=== FONTES DO USUÁRIO ===\n"; userSources.forEach((s) => { ctx += `- ${s.title}${s.url ? ` (${s.url})` : ""}\n` }) }
 
+    // Check if we got any data at all
+    const totalItems = googleTrends.length + hackerNews.length + Object.values(perTerm).reduce((s, d) => s + d.news.length + d.yt.length + d.reddit.length, 0)
+    if (totalItems === 0) {
+      // Fallback: ask Claude to generate based on knowledge
+      ctx = `Não foi possível buscar notícias em tempo real. Gere ideias baseadas no seu conhecimento mais recente sobre estes temas: ${terms.map((t) => t.term).join(", ")}.\n\nPriorize assuntos que costumam ser tendência e têm alta demanda de conteúdo.`
+    }
+
     const ideasPerTerm = Math.max(4, Math.floor(10 / terms.length))
 
     const prompt = `Você é um curador de conteúdo digital. Analise os dados REAIS abaixo e identifique oportunidades de conteúdo.

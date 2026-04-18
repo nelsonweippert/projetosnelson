@@ -87,6 +87,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   const [customIdeaInput, setCustomIdeaInput] = useState("")
   const [customIdeaLoading, setCustomIdeaLoading] = useState(false)
   const [customIdeaTerm, setCustomIdeaTerm] = useState<string>("")
+  const [ideaError, setIdeaError] = useState<string | null>(null)
 
   useEffect(() => {
     if (tab === "ideas" && !ideasLoaded) {
@@ -118,17 +119,18 @@ export function ConteudoClient({ initialContents, areas }: Props) {
 
   async function handleGenerateIdeas() {
     setGeneratingIdeas(true)
+    setIdeaError(null)
     try {
       const res = await fetch("/api/content/ideas", { method: "POST" })
+      const data = await res.json()
       if (res.ok) {
-        const data = await res.json()
         setIdeaFeed(data.ideas ?? [])
+        if (data.created === 0) setIdeaError("Nenhuma ideia gerada. Tente novamente.")
       } else {
-        const err = await res.json()
-        console.error("Erro ao gerar ideias:", err.error)
+        setIdeaError(data.error || "Erro ao gerar ideias")
       }
     } catch (err) {
-      console.error("Erro de conexão:", err)
+      setIdeaError("Erro de conexão. Verifique se o app está rodando.")
     }
     setGeneratingIdeas(false)
   }
@@ -614,9 +616,12 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                 <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider">Termos monitorados</h3>
                 <button onClick={handleGenerateIdeas} disabled={generatingIdeas || monitorTerms.filter((t) => t.isActive).length === 0}
                   className="flex items-center gap-1.5 px-3 py-2 bg-accent/10 text-accent text-xs font-semibold border border-accent/20 rounded-xl hover:bg-accent/20 disabled:opacity-50">
-                  {generatingIdeas ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Gerar ideias agora
+                  {generatingIdeas ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} {generatingIdeas ? "Pesquisando..." : "Gerar ideias agora"}
                 </button>
               </div>
+              {ideaError && (
+                <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 mb-3">{ideaError}</div>
+              )}
               <div className="flex flex-wrap gap-2 mb-3">
                 {monitorTerms.map((t: any) => (
                   <span key={t.id} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border", t.isActive ? "border-accent/30 bg-accent/10 text-accent" : "border-cockpit-border text-cockpit-muted line-through")}>
