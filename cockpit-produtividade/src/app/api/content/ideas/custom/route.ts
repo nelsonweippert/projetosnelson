@@ -15,16 +15,16 @@ export async function POST(req: NextRequest) {
   const { description } = await req.json()
   if (!description) return NextResponse.json({ error: "Descrição obrigatória" }, { status: 400 })
 
-  // Get terms for matching
-  const terms = await db.monitorTerm.findMany({ where: { userId, isActive: true } })
-  const termNames = terms.map((t) => t.term)
-  const defaultTerm = termNames[0] || description.split(" ").slice(0, 3).join(" ")
+  // Extract a short term from the description (first ~3 words)
+  const autoTerm = description.split(/\s+/).slice(0, 4).join(" ")
 
   try {
     const prompt = `Você é um analista de conteúdo digital. O criador tem uma ideia específica e quer saber se vale a pena produzir.
 
 IDEIA DO CRIADOR:
 "${description}"
+
+IMPORTANTE: Esta ideia pode ser de QUALQUER nicho — não está limitada a nenhum tema específico.
 
 Analise PROFUNDAMENTE esta ideia e retorne EXATAMENTE 3 variações de conteúdo baseadas nela.
 
@@ -38,7 +38,7 @@ O score deve ser REALISTA:
 - 94-96: tema relevante com boa janela, público engajado
 - 90-93: tema interessante mas já saturado ou timing não ideal
 
-${termNames.length > 0 ? `Associe cada ideia a um destes termos: ${termNames.map((t) => `"${t}"`).join(", ")}. Se nenhum encaixar, use "${defaultTerm}".` : `Use "${defaultTerm}" como termo.`}
+Use o campo "term" como uma TAG CURTA do tema (ex: "finanças pessoais", "receitas fit", "marketing digital").
 
 Retorne APENAS JSON array (sem markdown):
 [{
@@ -46,8 +46,8 @@ Retorne APENAS JSON array (sem markdown):
   "summary": "análise de 2-3 frases: por que funciona (ou não), contexto atual, oportunidade",
   "angle": "o que diferencia ESTA variação das outras",
   "hook": "sugestão de hook para os primeiros 3 segundos",
-  "term": "termo associado",
-  "relevance": "análise de viralização: timing + demanda + competição + público-alvo",
+  "term": "tag curta do tema (2-3 palavras)",
+  "relevance": "análise de viralização: timing + demanda + competição + público-alvo + fontes PT-BR para a editora buscar imagens",
   "source": "Ideia personalizada",
   "score": 95
 }]`
@@ -64,11 +64,11 @@ Retorne APENAS JSON array (sem markdown):
     let ideas: any[]
     try { ideas = JSON.parse(clean) } catch { const m = clean.match(/\[[\s\S]*\]/); if (m) ideas = JSON.parse(m[0]); else return NextResponse.json({ error: "Erro parse" }, { status: 500 }) }
 
-    ideas = ideas.filter((i: any) => i.title && i.summary).map((i: any) => {
-      let matched = termNames.find((t) => t === i.term)
-      if (!matched) matched = termNames.find((t) => t.toLowerCase().split(/\s+/).some((w) => w.length >= 2 && (i.title || "").toLowerCase().includes(w))) || defaultTerm
-      return { ...i, term: matched, score: Math.min(100, Math.max(90, i.score || 90)) }
-    })
+    ideas = ideas.filter((i: any) => i.title && i.summary).map((i: any) => ({
+      ...i,
+      term: i.term || autoTerm,
+      score: Math.min(100, Math.max(90, i.score || 90)),
+    }))
 
     await db.ideaFeed.createMany({
       data: ideas.map((i: any) => ({

@@ -630,12 +630,12 @@ export function ConteudoClient({ initialContents, areas }: Props) {
 
             {/* Custom idea input */}
             <div className="cockpit-card">
-              <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider mb-3">Avaliar ideia específica</h3>
-              <p className="text-[10px] text-cockpit-muted mb-3">Descreva uma ideia de conteúdo e a IA avaliará o potencial de viralização com 3 variações de ângulo.</p>
+              <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider mb-3">💡 Avaliar ideia específica</h3>
+              <p className="text-[10px] text-cockpit-muted mb-3">Descreva qualquer ideia de conteúdo — de qualquer nicho — e a IA avaliará o potencial com 3 variações. Pode ser relacionada aos temas monitorados ou totalmente nova.</p>
               <div className="flex items-start gap-2">
                 <textarea value={customIdeaInput} onChange={(e) => setCustomIdeaInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleCustomIdea() } }}
-                  placeholder="Ex: Comparar DeepSeek R3 com GPT-5 para programadores, mostrando testes reais de código..."
+                  placeholder="Qualquer ideia... Ex: 'Receitas fit em 1 minuto', 'Como negociar salário na entrevista', 'Review do novo iPhone'..."
                   rows={2}
                   className="flex-1 px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30 resize-none" />
                 <button onClick={handleCustomIdea} disabled={!customIdeaInput.trim() || customIdeaLoading}
@@ -645,32 +645,36 @@ export function ConteudoClient({ initialContents, areas }: Props) {
               </div>
             </div>
 
-            {/* Filters */}
-            {/* Filtro por termos monitorados */}
-            {monitorTerms.length > 0 && (() => {
-              const activeTerms = monitorTerms.filter((t: any) => t.isActive)
+            {/* Filters — all terms from feed + monitored */}
+            {ideaFeed.length > 0 && (() => {
+              // Collect all unique terms: monitored + from feed
+              const monitoredTermNames = monitorTerms.filter((t: any) => t.isActive).map((t: any) => t.term)
+              const feedTerms = [...new Set(ideaFeed.filter((i: any) => !i.isUsed).map((i: any) => i.term).filter(Boolean))]
+              const allTerms = [...new Set([...monitoredTermNames, ...feedTerms])]
+
               // Auto-select first term if none selected
-              if (!ideaTermFilter && activeTerms.length > 0) setIdeaTermFilter(activeTerms[0].term)
+              if (!ideaTermFilter && allTerms.length > 0) setIdeaTermFilter(allTerms[0])
+
+              const usedWithContent = ideaFeed.filter((i: any) => i.isUsed && contents.some((c: Content) => c.ideaFeedId === i.id || c.title === i.title)).length
+
               return (
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1 flex-wrap">
-                    {activeTerms.map((t: any) => {
-                      const count = ideaFeed.filter((i: any) => !i.isUsed && i.term === t.term).length
+                    {allTerms.map((term) => {
+                      const count = ideaFeed.filter((i: any) => !i.isUsed && i.term === term).length
+                      const isMonitored = monitoredTermNames.includes(term)
                       return (
-                        <button key={t.id} onClick={() => setIdeaTermFilter(t.term)} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", ideaTermFilter === t.term ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
-                          {t.term} <span className="text-[10px] opacity-70 ml-1">{count}</span>
+                        <button key={term} onClick={() => setIdeaTermFilter(term)} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", ideaTermFilter === term ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
+                          {!isMonitored && "💡 "}{term} <span className="text-[10px] opacity-70 ml-1">{count}</span>
                         </button>
                       )
                     })}
                   </div>
-                  {(() => {
-                    const usedWithContent = ideaFeed.filter((i: any) => i.isUsed && contents.some((c: Content) => c.ideaFeedId === i.id || c.title === i.title)).length
-                    return usedWithContent > 0 ? (
-                      <button onClick={() => setShowUsedIdeas(!showUsedIdeas)} className={cn("px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors", showUsedIdeas ? "border-accent/30 bg-accent/10 text-accent" : "border-cockpit-border text-cockpit-muted hover:text-cockpit-text")}>
-                        {showUsedIdeas ? "Esconder" : "Em produção"} <span className="text-[10px] opacity-70 ml-1">{usedWithContent}</span>
-                      </button>
-                    ) : null
-                  })()}
+                  {usedWithContent > 0 && (
+                    <button onClick={() => setShowUsedIdeas(!showUsedIdeas)} className={cn("px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors", showUsedIdeas ? "border-accent/30 bg-accent/10 text-accent" : "border-cockpit-border text-cockpit-muted hover:text-cockpit-text")}>
+                      {showUsedIdeas ? "Esconder" : "Em produção"} <span className="text-[10px] opacity-70 ml-1">{usedWithContent}</span>
+                    </button>
+                  )}
                 </div>
               )
             })()}
