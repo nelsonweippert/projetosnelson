@@ -24,9 +24,21 @@ async function fetchGoogleNews(term: string): Promise<RawItem[]> {
       const re = /<item>([\s\S]*?)<\/item>/g
       let m
       while ((m = re.exec(xml)) !== null && items.length < 12) {
-        const t = m[1].match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || m[1].match(/<title>(.*?)<\/title>/)
-        const d = m[1].match(/<pubDate>(.*?)<\/pubDate>/)
-        if (t) items.push({ title: t[1].replace(/<[^>]*>/g, "").trim(), date: d?.[1], source: "Google News" })
+        const itemXml = m[1]
+        const t = itemXml.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || itemXml.match(/<title>(.*?)<\/title>/)
+        const d = itemXml.match(/<pubDate>(.*?)<\/pubDate>/)
+        const linkMatch = itemXml.match(/<link>(.*?)<\/link>/)
+        // Google News RSS has source URL in <source url="..."> tag
+        const sourceUrlMatch = itemXml.match(/<source[^>]*url="([^"]*)"/)
+        const realUrl = sourceUrlMatch?.[1] || linkMatch?.[1]
+        const sourceNameMatch = itemXml.match(/<source[^>]*>(.*?)<\/source>/)
+        const sourceName = sourceNameMatch?.[1]?.replace(/<[^>]*>/g, "").trim()
+        if (t) items.push({
+          title: t[1].replace(/<[^>]*>/g, "").trim(),
+          url: realUrl,
+          date: d?.[1],
+          source: sourceName ? `Google News (${sourceName})` : "Google News",
+        })
       }
     }
     return items
@@ -134,7 +146,7 @@ export async function POST(req: NextRequest) {
     for (const t of terms) {
       const d = perTerm[t.term]
       ctx += `\n=== TERMO: "${t.term}" ===\n`
-      if (d.news.length > 0) { ctx += "GOOGLE NEWS:\n"; d.news.forEach((n, i) => { ctx += `${i + 1}. ${n.title}${n.date ? ` [${n.date}]` : ""}\n` }) }
+      if (d.news.length > 0) { ctx += "GOOGLE NEWS:\n"; d.news.forEach((n, i) => { ctx += `${i + 1}. ${n.title}${n.url ? ` — ${n.url}` : ""}${n.date ? ` [${n.date}]` : ""}\n` }) }
       if (d.yt.length > 0) { ctx += "YOUTUBE:\n"; d.yt.forEach((v, i) => { ctx += `${i + 1}. ${v.title}\n` }) }
       if (d.reddit.length > 0) { ctx += "REDDIT:\n"; d.reddit.forEach((r, i) => { ctx += `${i + 1}. ${r.title}${r.url ? ` (${r.url})` : ""} [${r.source}]\n` }) }
     }
@@ -195,6 +207,17 @@ Retorne SOMENTE um JSON array. Sem texto antes ou depois. Campos curtos:
       }
     }
 
+    // Collect source URLs per term for attaching to ideas
+    const sourceUrlsByTerm: Record<string, string[]> = {}
+    for (const t of terms) {
+      const d = perTerm[t.term]
+      const urls: string[] = []
+      d.news.forEach((n) => { if (n.url) urls.push(n.url) })
+      d.reddit.forEach((r) => { if (r.url) urls.push(r.url) })
+      hackerNews.forEach((h) => { if (h.url) urls.push(h.url) })
+      sourceUrlsByTerm[t.term] = urls.slice(0, 5)
+    }
+
     // Force-match ALL ideas to monitored terms
     const termNames = terms.map((t) => t.term)
     ideas = ideas.filter((i: any) => i.title && i.summary).map((i: any) => {
@@ -222,11 +245,15 @@ Retorne SOMENTE um JSON array. Sem texto antes ou depois. Campos curtos:
     }).sort((a: any, b: any) => b.score - a.score)
 
     await db.ideaFeed.createMany({
-      data: ideas.map((i: any) => ({
-        title: i.title, summary: i.summary, angle: i.angle || null, hook: i.hook || null,
-        term: i.term, relevance: `[${i.score}/100] ${i.relevance || ""}`, source: i.source || "Multi-source",
-        score: i.score, userId,
-      })),
+      data: ideas.map((i: any) => {
+        const urls = sourceUrlsByTerm[i.term] ?? []
+        const urlsText = urls.length > 0 ? `\n\n🔗 Fontes:\n${urls.map((u) => `• ${u}`).join("\n")}` : ""
+        return {
+          title: i.title, summary: i.summary, angle: i.angle || null, hook: i.hook || null,
+          term: i.term, relevance: `[${i.score}/100] ${i.relevance || ""}${urlsText}`,
+          source: i.source || "Multi-source", score: i.score, userId,
+        }
+      }),
     })
 
     const allIdeas = await db.ideaFeed.findMany({ where: { userId, isDiscarded: false }, orderBy: { createdAt: "desc" }, take: 100 })

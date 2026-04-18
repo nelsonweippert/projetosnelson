@@ -774,7 +774,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                             {idea.source && idea.source !== "ai_research" && idea.source !== "ai_generated" && idea.source !== "cron" && <span className="text-[10px] text-cockpit-muted">📰 {idea.source}</span>}
                             {idea.angle && <span className="text-[10px] text-cockpit-muted">💡 {idea.angle}</span>}
                           </div>
-                          {idea.relevance && <p className="text-[10px] text-cockpit-muted mt-1.5">📈 {idea.relevance}</p>}
+                          {idea.relevance && <p className="text-[10px] text-cockpit-muted mt-1.5 whitespace-pre-wrap">📈 {idea.relevance.split(/(https?:\/\/[^\s\)]+)/g).map((part: string, j: number) => /^https?:\/\//.test(part) ? <a key={j} href={part} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-accent/10 text-accent text-[9px] font-medium rounded hover:underline">🔗 {(() => { try { return new URL(part).hostname.replace("www.","") } catch { return part.substring(0,30) } })()}</a> : <span key={j}>{part}</span>)}</p>}
                           {idea.hook && <p className="text-xs text-cockpit-muted mt-2 italic border-l-2 border-accent/30 pl-2">Hook: "{idea.hook}"</p>}
                         </div>
                         <div className="flex flex-col gap-1.5 flex-shrink-0">
