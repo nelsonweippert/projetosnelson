@@ -147,29 +147,18 @@ export async function POST(req: NextRequest) {
       ctx = `Não foi possível buscar notícias em tempo real. Gere ideias baseadas no seu conhecimento mais recente sobre estes temas: ${terms.map((t) => t.term).join(", ")}.\n\nPriorize assuntos que costumam ser tendência e têm alta demanda de conteúdo.`
     }
 
-    const ideasPerTerm = Math.max(4, Math.floor(10 / terms.length))
+    const totalIdeas = Math.min(6, terms.length * 3)
+    const termList = terms.map((t) => `"${t.term}"`).join(", ")
 
-    const prompt = `Você é um curador de conteúdo digital. Analise os dados REAIS abaixo e identifique oportunidades de conteúdo.
+    const prompt = `Analise os dados abaixo e gere ${totalIdeas} ideias de conteúdo.
 
 ${ctx}
 
-Gere ${ideasPerTerm} ideias para CADA termo. Baseie-se EXCLUSIVAMENTE nos dados acima.
-Cruze fontes: tema em 3+ fontes = score alto. Priorize últimas 24-48h.
+Termos permitidos: ${termList}
+Score: 97-100 viral, 94-96 bom, 90-93 ok.
 
-O campo "term" DEVE ser EXATAMENTE um destes: ${terms.map((t) => `"${t.term}"`).join(", ")}
-
-Score: 97-100 viral agora, 94-96 boa janela, 90-93 relevante.
-
-REGRAS DE FORMATO:
-- Cada campo deve ser CURTO (máx 2 frases)
-- "summary": máximo 2 frases
-- "relevance": 1 frase com a fonte original
-- "source": apenas nome da fonte (ex: "Google News, Reddit")
-- "hook": 1 frase curta
-- NÃO escreva textos longos em nenhum campo
-
-Retorne APENAS JSON array:
-[{"title":"...","summary":"resumo curto","angle":"ângulo curto","hook":"hook curto","term":"...","relevance":"fonte original","source":"Google News","score":95}]`
+Retorne SOMENTE um JSON array. Sem texto antes ou depois. Campos curtos (1 frase cada):
+[{"title":"titulo","summary":"resumo","angle":"angulo","hook":"hook","term":"termo","relevance":"fonte","source":"fonte","score":95}]`
 
     const start = Date.now()
     const message = await anthropic.messages.create({ model: "claude-sonnet-4-6", max_tokens: 8192, messages: [{ role: "user", content: prompt }] })
