@@ -167,6 +167,25 @@ A FRASE DE DESTAQUE de cada bloco deve:
 - Funcionar isolada como quote para cortes/reels
 - Seguir a estrutura lógica de viralização: hook → tensão → revelação → CTA
 
+Após os blocos, adicione uma seção:
+
+## 🖼️ FONTES DE IMAGENS E B-ROLL PARA EDIÇÃO
+
+Para CADA bloco do briefing, liste:
+1. **O que mostrar na tela** — descrição visual específica (ex: "gráfico de crescimento do Bitcoin", "tela do ChatGPT gerando código")
+2. **Onde buscar** — sites específicos com links:
+   - Imagens gratuitas: Unsplash (unsplash.com), Pexels (pexels.com), Pixabay (pixabay.com)
+   - Vídeos B-roll gratuitos: Pexels Video, Coverr (coverr.co), Videvo (videvo.net)
+   - Screenshots/gravações de tela: indicar qual app/site gravar
+   - Gráficos/dados: indicar qual fonte de dados usar (ex: CoinMarketCap, Google Trends, etc)
+   - Imagens premium (se necessário): Shutterstock, Adobe Stock, Getty
+3. **Termos de busca sugeridos** — palavras-chave exatas para buscar em cada banco de imagem (em inglês e português)
+
+Também inclua:
+- **Fontes de áudio**: sites de música livre (Epidemic Sound, Artlist, YouTube Audio Library, Pixabay Music)
+- **Fontes de SFX**: Freesound.org, Pixabay SFX, Mixkit
+- **Fontes de ícones/grafismos**: Flaticon, LottieFiles (animações), Canva
+
 Formate com markdown. Use **negrito** para as frases de destaque.`
       break
 
@@ -194,6 +213,11 @@ Gere indicações técnicas de edição BLOCO A BLOCO:
    - Ritmo de cortes (a cada Xs)
    - Momentos de pattern interrupt
    - Sugestões de memes/referências visuais se aplicável
+
+3. Para cada B-roll sugerido, indique:
+   - Termo de busca em inglês para bancos de imagem/vídeo
+   - Site recomendado (Pexels, Unsplash, Coverr, Videvo, etc)
+   - Se é screenshot/gravação de tela, indicar qual app/site
 
 Formate como guia prático que o editor pode seguir passo a passo.`
       break
