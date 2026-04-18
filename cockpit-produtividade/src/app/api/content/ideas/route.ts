@@ -166,10 +166,29 @@ Retorne APENAS JSON array:
     let ideas: any[]
     try { ideas = JSON.parse(clean) } catch { const m = clean.match(/\[[\s\S]*\]/); if (m) ideas = JSON.parse(m[0]); else return NextResponse.json({ error: "Erro parse" }, { status: 500 }) }
 
+    // Force-match ALL ideas to monitored terms
     const termNames = terms.map((t) => t.term)
     ideas = ideas.filter((i: any) => i.title && i.summary).map((i: any) => {
+      // Try exact match first
       let matched = termNames.find((t) => t === i.term)
-      if (!matched) matched = termNames.find((t) => t.toLowerCase().split(/\s+/).some((w) => w.length >= 2 && (i.term || i.title || "").toLowerCase().includes(w))) || termNames[0]
+      if (!matched) {
+        // Try fuzzy: check if any word from the term appears in the idea's term, title, or summary
+        const ideaText = `${i.term || ""} ${i.title || ""} ${i.summary || ""}`.toLowerCase()
+        matched = termNames.find((t) => {
+          const words = t.toLowerCase().split(/\s+/)
+          return words.some((w) => w.length >= 2 && ideaText.includes(w))
+        })
+      }
+      if (!matched) {
+        // Try reverse: check if any word from the idea term appears in a monitored term
+        const ideaWords = (i.term || "").toLowerCase().split(/\s+/)
+        matched = termNames.find((t) => {
+          const tLower = t.toLowerCase()
+          return ideaWords.some((w: string) => w.length >= 2 && tLower.includes(w))
+        })
+      }
+      // Fallback: first monitored term
+      if (!matched) matched = termNames[0]
       return { ...i, term: matched, score: Math.min(100, Math.max(90, i.score || 90)) }
     }).sort((a: any, b: any) => b.score - a.score)
 

@@ -83,9 +83,16 @@ export function ConteudoClient({ initialContents, areas }: Props) {
 
   useEffect(() => {
     if (tab === "ideas" && !ideasLoaded) {
-      Promise.all([getMonitorTermsAction(), getIdeasAction()]).then(([termsRes, ideasRes]) => {
+      Promise.all([getMonitorTermsAction(), getIdeasAction()]).then(async ([termsRes, ideasRes]) => {
         if (termsRes.success) setMonitorTerms(termsRes.data as any[])
-        if (ideasRes.success) setIdeaFeed(ideasRes.data as any[])
+        if (ideasRes.success) {
+          setIdeaFeed(ideasRes.data as any[])
+          // Auto-reclassify ideas to monitored terms
+          try {
+            const res = await fetch("/api/content/ideas/reclassify", { method: "POST" })
+            if (res.ok) { const data = await res.json(); if (data.fixed > 0) setIdeaFeed(data.ideas) }
+          } catch {}
+        }
         setIdeasLoaded(true)
       })
     }
