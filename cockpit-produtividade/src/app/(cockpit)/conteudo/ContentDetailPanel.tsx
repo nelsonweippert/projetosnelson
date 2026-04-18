@@ -72,7 +72,6 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
     const parts = text.split(urlRegex)
     return parts.map((part, i) => {
       if (urlRegex.test(part)) {
-        // Extract display name from URL
         let display = part
         try { display = new URL(part).hostname.replace("www.", "") } catch {}
         return (
@@ -84,6 +83,28 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
       }
       return <span key={i}>{part}</span>
     })
+  }
+
+  // Extract and classify links from text
+  function extractLinks(text: string): { ptBr: { url: string; host: string }[]; en: { url: string; host: string }[] } {
+    const urlRegex = /https?:\/\/[^\s\)]+/g
+    const urls = text.match(urlRegex) ?? []
+    const ptBrDomains = [".com.br", ".br/", "tecmundo", "olhardigital", "canaltech", "infomoney", "g1.globo", "uol.com", "exame.com", "livecoins", "moneytimes", "seudinheiro", "tecnoblog", "meiobit", "tabnews"]
+    const ptBr: { url: string; host: string }[] = []
+    const en: { url: string; host: string }[] = []
+    for (const url of urls) {
+      let host = url
+      try { host = new URL(url).hostname.replace("www.", "") } catch {}
+      const isPtBr = ptBrDomains.some((d) => url.toLowerCase().includes(d))
+      if (isPtBr) ptBr.push({ url, host })
+      else en.push({ url, host })
+    }
+    return { ptBr, en }
+  }
+
+  // Render text WITHOUT links (for the description part)
+  function renderTextOnly(text: string) {
+    return text.replace(/https?:\/\/[^\s\)]+/g, "").replace(/\n🔗 Fontes:[\s\S]*$/, "").trim()
   }
 
   const isLongForm = content.skill === "LONG_VIDEO" || content.skill === "YOUTUBE_VIDEO"
@@ -344,14 +365,61 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
               </div>
 
               {/* Research base — why this idea was chosen */}
-              {research && (
-                <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 overflow-hidden">
-                  <div className="px-4 py-2.5 border-b border-blue-500/15">
-                    <p className="text-xs font-semibold text-blue-400 flex items-center gap-1.5">📰 Por que esta ideia foi escolhida</p>
+              {research && (() => {
+                const textOnly = renderTextOnly(research)
+                const { ptBr, en } = extractLinks(research)
+                const hasLinks = ptBr.length > 0 || en.length > 0
+                return (
+                  <div className="space-y-3">
+                    {/* Description */}
+                    <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 overflow-hidden">
+                      <div className="px-4 py-2.5 border-b border-blue-500/15">
+                        <p className="text-xs font-semibold text-blue-400 flex items-center gap-1.5">📰 Por que esta ideia foi escolhida</p>
+                      </div>
+                      <div className="px-4 py-3 text-sm text-cockpit-text whitespace-pre-wrap leading-relaxed">{textOnly}</div>
+                    </div>
+
+                    {/* Links separated by language */}
+                    {hasLinks && (
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* PT-BR */}
+                        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 overflow-hidden">
+                          <div className="px-3 py-2 border-b border-emerald-500/15">
+                            <p className="text-[11px] font-semibold text-emerald-400">🇧🇷 Fontes em Português</p>
+                          </div>
+                          <div className="px-3 py-2 space-y-1.5">
+                            {ptBr.length > 0 ? ptBr.map((link, i) => (
+                              <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-cockpit-bg border border-cockpit-border rounded-lg text-xs text-cockpit-text hover:border-emerald-500/40 hover:text-emerald-400 transition-colors truncate">
+                                🔗 {link.host}
+                              </a>
+                            )) : (
+                              <p className="text-[10px] text-cockpit-muted py-1">Nenhuma fonte PT-BR encontrada</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* EN */}
+                        <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 overflow-hidden">
+                          <div className="px-3 py-2 border-b border-blue-500/15">
+                            <p className="text-[11px] font-semibold text-blue-400">🇺🇸 Fontes em Inglês</p>
+                          </div>
+                          <div className="px-3 py-2 space-y-1.5">
+                            {en.length > 0 ? en.map((link, i) => (
+                              <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-cockpit-bg border border-cockpit-border rounded-lg text-xs text-cockpit-text hover:border-blue-500/40 hover:text-blue-400 transition-colors truncate">
+                                🔗 {link.host}
+                              </a>
+                            )) : (
+                              <p className="text-[10px] text-cockpit-muted py-1">Nenhuma fonte EN encontrada</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="px-4 py-3 text-sm text-cockpit-text whitespace-pre-wrap leading-relaxed">{renderTextWithLinks(research)}</div>
-                </div>
-              )}
+                )
+              })()}
             </>)}
 
             {/* ═══ ELABORAÇÃO ═══ */}
