@@ -152,8 +152,11 @@ O campo "term" DEVE ser EXATAMENTE um destes: ${terms.map((t) => `"${t.term}"`).
 
 Score: 97-100 viral agora, 94-96 boa janela, 90-93 relevante.
 
+IMPORTANTE: No campo "source", inclua os NOMES das fontes reais E as manchetes originais que originaram a ideia.
+No campo "relevance", inclua links/referências de onde a editora pode ir buscar imagens e screenshots (sites PT-BR de preferência).
+
 Retorne APENAS JSON array:
-[{"title":"...","summary":"...","angle":"...","hook":"...","term":"...","relevance":"...","source":"...","score":95}]`
+[{"title":"...","summary":"...","angle":"...","hook":"...","term":"...","relevance":"notícia original + sites PT-BR onde buscar imagens (Tecmundo, InfoMoney, G1, Canaltech, etc)","source":"Google News: 'manchete original' + Reddit: r/subreddit","score":95}]`
 
     const message = await anthropic.messages.create({ model: "claude-sonnet-4-6", max_tokens: 4096, messages: [{ role: "user", content: prompt }] })
     const text = message.content[0]

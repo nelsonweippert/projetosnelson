@@ -169,22 +169,31 @@ A FRASE DE DESTAQUE de cada bloco deve:
 
 Após os blocos, adicione uma seção:
 
-## 🖼️ FONTES DE IMAGENS E B-ROLL PARA EDIÇÃO
+## 📰 FONTES PARA A EDIÇÃO
 
-Para CADA bloco do briefing, liste:
-1. **O que mostrar na tela** — descrição visual específica (ex: "gráfico de crescimento do Bitcoin", "tela do ChatGPT gerando código")
-2. **Onde buscar** — sites específicos com links:
-   - Imagens gratuitas: Unsplash (unsplash.com), Pexels (pexels.com), Pixabay (pixabay.com)
-   - Vídeos B-roll gratuitos: Pexels Video, Coverr (coverr.co), Videvo (videvo.net)
-   - Screenshots/gravações de tela: indicar qual app/site gravar
-   - Gráficos/dados: indicar qual fonte de dados usar (ex: CoinMarketCap, Google Trends, etc)
-   - Imagens premium (se necessário): Shutterstock, Adobe Stock, Getty
-3. **Termos de busca sugeridos** — palavras-chave exatas para buscar em cada banco de imagem (em inglês e português)
+A editora usará estas fontes para tirar screenshots, imagens, textos e dados para incluir no vídeo.
+TODOS os vídeos são em PORTUGUÊS BRASILEIRO — priorize fontes em PT-BR.
 
-Também inclua:
-- **Fontes de áudio**: sites de música livre (Epidemic Sound, Artlist, YouTube Audio Library, Pixabay Music)
-- **Fontes de SFX**: Freesound.org, Pixabay SFX, Mixkit
-- **Fontes de ícones/grafismos**: Flaticon, LottieFiles (animações), Canva
+Analise a PESQUISA/REFERÊNCIAS abaixo e extraia:
+
+1. **FONTES DA PESQUISA ORIGINAL** — liste todas as fontes, sites, links e referências mencionadas na pesquisa. Para cada uma:
+   - Nome do site/fonte
+   - O que a editora pode extrair de lá (screenshot, gráfico, texto, dado)
+   - Se o site é em inglês, sugira o equivalente em PT-BR (ex: se a fonte é TechCrunch, sugerir Tecmundo, Olhar Digital, Canaltech, etc.)
+
+2. **SITES PT-BR RECOMENDADOS** para buscar imagens/screenshots sobre este tema:
+   - Portais de notícias: G1, Folha, UOL, InfoMoney, Exame, Tecmundo, Olhar Digital, Canaltech, Livecoins
+   - Indique 3-5 sites ESPECÍFICOS para este tema onde a editora pode:
+     - Tirar screenshots de manchetes (prova social)
+     - Copiar gráficos e dados
+     - Encontrar imagens contextuais
+
+3. **O QUE CAPTURAR POR BLOCO** — para cada bloco do briefing:
+   - Descreva exatamente o que mostrar na tela
+   - Em qual site/app capturar o screenshot
+   - Texto overlay sugerido (em português)
+
+4. **TERMOS DE BUSCA** em português para Google Imagens e YouTube (a editora buscará imagens complementares)
 
 Formate com markdown. Use **negrito** para as frases de destaque.`
       break
