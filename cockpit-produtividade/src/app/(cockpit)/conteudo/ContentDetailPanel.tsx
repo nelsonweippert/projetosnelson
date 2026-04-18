@@ -66,8 +66,12 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   const prevPhase = curIdx > 0 ? PHASES[curIdx - 1] : null
   const nextPhase = curIdx < PHASES.length - 1 ? PHASES[curIdx + 1] : null
 
-  const durationPresets = content.skill === "LONG_VIDEO"
+  const isLongForm = content.skill === "LONG_VIDEO" || content.skill === "YOUTUBE_VIDEO"
+  const isShorts = content.skill === "YOUTUBE_SHORTS"
+  const durationPresets = isLongForm
     ? [{ l: "8 min", v: 480 }, { l: "10 min", v: 600 }, { l: "15 min", v: 900 }, { l: "20 min", v: 1200 }, { l: "25 min", v: 1500 }, { l: "30 min", v: 1800 }]
+    : isShorts
+    ? [{ l: "15s", v: 15 }, { l: "30s", v: 30 }, { l: "45s", v: 45 }, { l: "60s", v: 60 }]
     : [{ l: "30s", v: 30 }, { l: "60s", v: 60 }, { l: "1:30", v: 90 }, { l: "2:00", v: 120 }, { l: "2:30", v: 150 }, { l: "3:00", v: 180 }]
 
   // ── Save ──────────────────────────────────────────────────────────────
@@ -300,18 +304,22 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
               {/* Skill selector */}
               <div>
                 <p className="text-xs font-medium text-cockpit-muted mb-2">Tipo de conteúdo</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {SKILL_LIST.map((s) => (
-                    <button key={s.id} onClick={() => save({ skill: s.id, platform: s.id === "SHORT_VIDEO" ? "TIKTOK" : s.id === "LONG_VIDEO" ? "YOUTUBE" : "INSTAGRAM", format: s.id === "SHORT_VIDEO" ? "SHORT" : s.id === "LONG_VIDEO" ? "LONG_VIDEO" : "POST" })}
-                      className={cn("flex items-center gap-2 p-3 rounded-xl border transition-all text-left",
-                        content.skill === s.id ? "border-accent bg-accent/10" : "border-cockpit-border hover:border-accent/30")}>
-                      <span className="text-xl">{s.icon}</span>
-                      <div>
-                        <p className={cn("text-xs font-semibold", content.skill === s.id ? "text-accent" : "text-cockpit-text")}>{s.label}</p>
-                        <p className="text-[10px] text-cockpit-muted">{s.description}</p>
-                      </div>
-                    </button>
-                  ))}
+                <div className="grid grid-cols-2 gap-2">
+                  {SKILL_LIST.map((s) => {
+                    const platformMap: Record<string, string> = { INSTAGRAM_REELS: "INSTAGRAM", YOUTUBE_SHORTS: "YOUTUBE", YOUTUBE_VIDEO: "YOUTUBE", TIKTOK_VIDEO: "TIKTOK" }
+                    const formatMap: Record<string, string> = { INSTAGRAM_REELS: "REELS", YOUTUBE_SHORTS: "SHORT", YOUTUBE_VIDEO: "LONG_VIDEO", TIKTOK_VIDEO: "SHORT" }
+                    return (
+                      <button key={s.id} onClick={() => save({ skill: s.id, platform: platformMap[s.id] || "YOUTUBE", format: formatMap[s.id] || "SHORT" })}
+                        className={cn("flex items-center gap-3 p-3 rounded-xl border transition-all text-left",
+                          content.skill === s.id ? "border-accent bg-accent/10" : "border-cockpit-border hover:border-accent/30")}>
+                        <span className="text-2xl">{s.icon}</span>
+                        <div>
+                          <p className={cn("text-xs font-semibold", content.skill === s.id ? "text-accent" : "text-cockpit-text")}>{s.label}</p>
+                          <p className="text-[10px] text-cockpit-muted leading-tight">{s.description}</p>
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 

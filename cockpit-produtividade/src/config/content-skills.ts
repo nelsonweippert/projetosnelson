@@ -4,7 +4,7 @@
 // and platform algorithm behavior (2024-2025).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export type SkillId = "SHORT_VIDEO" | "LONG_VIDEO" | "INSTAGRAM" | "RESEARCH"
+export type SkillId = "SHORT_VIDEO" | "LONG_VIDEO" | "INSTAGRAM" | "RESEARCH" | "INSTAGRAM_REELS" | "YOUTUBE_SHORTS" | "YOUTUBE_VIDEO" | "TIKTOK_VIDEO"
 
 export type PhaseId =
   | "IDEA" | "RESEARCH" | "SCRIPT" | "RECORDING"
@@ -842,15 +842,187 @@ const RESEARCH: ContentSkill = {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SKILL 5: INSTAGRAM REELS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const INSTAGRAM_REELS: ContentSkill = {
+  id: "INSTAGRAM_REELS",
+  label: "Instagram Reels",
+  icon: "🎞️",
+  description: "Reels de 30s–3min otimizados para o algoritmo do Instagram",
+  platforms: ["INSTAGRAM"],
+  phases: SHORT_VIDEO.phases, // Same production phases
+  bestPractices: [
+    "Reels 60s-90s performam melhor para educação. 30s para trends virais",
+    "Sends via DM são o sinal #1 para distribuição de Reels no Instagram",
+    "Instagram prioriza conteúdo ORIGINAL — nunca reposte com marca d'água do TikTok",
+    "Caption curta (1-2 linhas) + hashtags — a mensagem principal vai no vídeo",
+    "Trending audio ajuda mas original audio com voiceover performa igual em 2026",
+    "Responda TODOS os comentários nos primeiros 30 min — dispara distribuição",
+    "Hook visual nos primeiros 1-2s é mais importante que hook falado no Reels",
+    "Formato 9:16 (1080x1920) obrigatório — sem bordas ou letterbox",
+    "Texto overlay grande e centralizado — 65% assistem sem som",
+    "Perguntas que exigem 5+ palavras de resposta geram mais peso algorítmico",
+    "Cover/thumbnail do Reel importa para o grid — mantenha identidade visual",
+  ],
+  commonMistakes: [
+    "Repostar TikTok com marca d'água — Instagram penaliza",
+    "Caption muito longa no Reels (a mensagem deve estar no vídeo)",
+    "Não otimizar o cover para o grid do perfil",
+    "Ignorar DM shares como métrica — é a mais importante",
+    "Usar hashtags banidas ou genéricas (#love #happy)",
+    "Não colocar texto overlay (65% assiste mudo)",
+    "Hook lento — no Reels o swipe é instantâneo",
+  ],
+  kpis: [
+    { label: "Sends/DM", target: "> 1% do alcance", why: "Principal sinal de distribuição para Reels em 2026" },
+    { label: "Saves", target: "> 3% do alcance", why: "Sinal premium — indica conteúdo de valor" },
+    { label: "Watch completion", target: "> 50%", why: "Reels com completion alta ganham Explore" },
+    { label: "Comentários 5+ palavras", target: "Maioria", why: "Comentários longos pesam mais no algoritmo" },
+  ],
+  scriptTemplates: SHORT_VIDEO.scriptTemplates,
+  sources: [
+    { title: "Instagram Reels Algorithm 2026 — EvergreenFeed", url: "https://www.evergreenfeed.com/blog/instagram-reels-algorithm/", description: "Sends/DM como principal sinal" },
+    { title: "Instagram Algorithm — Buffer", url: "https://buffer.com/resources/instagram-algorithms/", description: "Guia completo do algoritmo" },
+  ],
+  lastUpdated: "2026-04-18",
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SKILL 6: YOUTUBE SHORTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const YOUTUBE_SHORTS: ContentSkill = {
+  id: "YOUTUBE_SHORTS",
+  label: "YouTube Shorts",
+  icon: "⚡",
+  description: "Shorts de 30s–60s otimizados para o feed de Shorts do YouTube",
+  platforms: ["YOUTUBE"],
+  phases: SHORT_VIDEO.phases,
+  bestPractices: [
+    "YouTube Shorts tem 5.91% de engagement rate — supera TikTok (2.80%)",
+    "Shorts e long-form são DESACOPLADOS desde 2025 — Shorts não prejudica vídeos longos",
+    "Shorts são avaliados por: swipe-through rate, loop rate, shares, engajamento nos primeiros segundos",
+    "Loop é POWER SIGNAL — faça o final conectar com o início para gerar replays",
+    "Título do Short aparece na busca — use keywords que as pessoas pesquisam",
+    "Shorts podem levar viewers para seus vídeos longos — mencione no CTA",
+    "Monetização: $0.01-$0.07 por 1K views — volume é essencial",
+    "Poste 1-2 Shorts por dia para máximo crescimento no algoritmo",
+    "Shorts com caption/legenda automática performam 12% melhor",
+    "O algoritmo do Shorts prioriza novidade — poste conteúdo original, não reciclado",
+  ],
+  commonMistakes: [
+    "Repostar de outras plataformas com marca d'água",
+    "Shorts com mais de 60 segundos (máximo absoluto da plataforma)",
+    "Não usar título otimizado para busca/SEO",
+    "Ignorar o loop — replays contam como watch time",
+    "Postar Shorts esporadicamente (algoritmo recompensa consistência diária)",
+    "Não incluir CTA para canal/vídeos longos",
+    "Thumbnail ruim — Shorts também aparecem na busca com thumbnail",
+  ],
+  kpis: [
+    { label: "Swipe-through rate", target: "Baixo (< 20%)", why: "% que passa sem assistir — quanto menor, melhor" },
+    { label: "Loop rate", target: "> 15%", why: "Replays contam como watch time adicional" },
+    { label: "Engagement rate", target: "> 5%", why: "Média da plataforma é 5.91% — fique acima" },
+    { label: "Subscribers gained", target: "> 0.5% dos views", why: "Shorts é porta de entrada para o canal" },
+  ],
+  scriptTemplates: SHORT_VIDEO.scriptTemplates,
+  sources: [
+    { title: "YouTube Shorts Best Practices 2026 — JoinBrands", url: "https://joinbrands.com/blog/youtube-shorts-best-practices/", description: "10 dicas para maximizar views" },
+    { title: "YouTube Algorithm 2026 — OutlierKit", url: "https://outlierkit.com/resources/youtube-algorithm-updates/", description: "Shorts desacoplado, satisfaction-weighted" },
+  ],
+  lastUpdated: "2026-04-18",
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SKILL 7: YOUTUBE VIDEO (Long-form)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const YOUTUBE_VIDEO: ContentSkill = {
+  id: "YOUTUBE_VIDEO",
+  label: "YouTube Vídeo",
+  icon: "🎬",
+  description: "Vídeos longos de 8–30min otimizados para o algoritmo do YouTube",
+  platforms: ["YOUTUBE"],
+  phases: LONG_VIDEO.phases,
+  bestPractices: [
+    ...LONG_VIDEO.bestPractices,
+    "Browse feed usa micro-nicho clustering — conteúdo genérico perde visibilidade",
+    "Premieres criam evento e geram buzz — use para lançamentos importantes",
+    "Community tab antecipa o vídeo 24h antes — aquece o público",
+    "End screens nos últimos 20s — sempre aponte para o próximo vídeo",
+    "Cards internos a cada 3-4 min — mantém viewer no seu canal",
+    "Descrição com keyword principal nas 2 primeiras linhas — SEO direto",
+  ],
+  commonMistakes: LONG_VIDEO.commonMistakes,
+  kpis: [
+    ...LONG_VIDEO.kpis,
+    { label: "Session time", target: "Viewer assiste 2+ vídeos", why: "YouTube recompensa canais que mantêm viewers na plataforma" },
+  ],
+  scriptTemplates: LONG_VIDEO.scriptTemplates,
+  sources: LONG_VIDEO.sources,
+  lastUpdated: "2026-04-18",
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SKILL 8: TIKTOK VIDEO
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TIKTOK_VIDEO: ContentSkill = {
+  id: "TIKTOK_VIDEO",
+  label: "TikTok Vídeo",
+  icon: "🎵",
+  description: "Vídeos de 30s–3min otimizados para o For You Page do TikTok",
+  platforms: ["TIKTOK"],
+  phases: SHORT_VIDEO.phases,
+  bestPractices: [
+    "TikTok recompensa novelty e trend participation — entre em trends rápido",
+    "Vídeos 50-60s têm média de 4.1M views vs 19K para <10s (dados 2026)",
+    "Curiosity stacking: crie múltiplos micro-gaps de curiosidade ao longo do vídeo",
+    "TikTok Creative Center mostra trends de áudio, hashtags e formatos em ascensão",
+    "Trending audio nas primeiras 24-72h dá boost de 30-60% no alcance",
+    "Duets e Stitch são formatos nativos que o algoritmo favorece",
+    "Comentar e engajar nos primeiros 30 min pós-publicação é crítico",
+    "TikTok premia autenticidade — over-produced pode parecer 'anúncio'",
+    "Responder comentários com vídeo gera 2-3x mais engajamento",
+    "Use 3-5 hashtags específicas — #fyp e #viral não ajudam mais",
+    "O algoritmo testa seu vídeo com 300-500 viewers primeiro — se engajar, escala",
+    "Poste entre 1-3 vídeos por dia para máximo crescimento",
+  ],
+  commonMistakes: [
+    "Usar #fyp e #viral como hashtags (não funcionam mais)",
+    "Início lento sem hook visual — swipe é imediato no FYP",
+    "Conteúdo over-produced que parece anúncio",
+    "Não participar de trends (formato/áudio) quando relevante",
+    "Postar e sair — engajamento nos primeiros 30 min é crucial",
+    "Vídeos muito curtos (<15s) que não dão tempo para mensagem",
+    "Não adaptar conteúdo para o tom do TikTok (casual, autêntico)",
+    "Ignorar TikTok Creative Center para trends",
+  ],
+  kpis: [
+    { label: "Watch completion", target: "> 50%", why: "Principal sinal para o algoritmo do FYP" },
+    { label: "Shares", target: "> 2% dos views", why: "Compartilhamentos valem 5-10x mais que likes" },
+    { label: "Comments", target: "> 1% dos views", why: "Engajamento ativo impulsiona distribuição" },
+    { label: "Saves", target: "> 3% dos views", why: "Indica conteúdo que será revisto" },
+    { label: "Profile visits", target: "> 2% dos views", why: "Interesse em mais conteúdo = sinal forte" },
+  ],
+  scriptTemplates: SHORT_VIDEO.scriptTemplates,
+  sources: [
+    { title: "Short-Form Video Statistics 2026 — AutoFaceless", url: "https://autofaceless.ai/blog/short-form-video-statistics-2026", description: "Dados de performance por plataforma" },
+    { title: "Short-Form Video Trends 2026 — ShortSync", url: "https://www.shortsync.app/resources/short-form-video-trends-2026", description: "Tendências e curiosity stacking" },
+  ],
+  lastUpdated: "2026-04-18",
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Export
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const CONTENT_SKILLS: Record<SkillId, ContentSkill> = {
-  SHORT_VIDEO,
-  LONG_VIDEO,
-  INSTAGRAM,
-  RESEARCH,
+  SHORT_VIDEO, LONG_VIDEO, INSTAGRAM, RESEARCH,
+  INSTAGRAM_REELS, YOUTUBE_SHORTS, YOUTUBE_VIDEO, TIKTOK_VIDEO,
 }
 
-export const SKILL_LIST = [SHORT_VIDEO, LONG_VIDEO, INSTAGRAM]
-export const ALL_SKILLS = [SHORT_VIDEO, LONG_VIDEO, INSTAGRAM, RESEARCH]
+// Skills available for content creation (new specific ones)
+export const SKILL_LIST = [INSTAGRAM_REELS, YOUTUBE_SHORTS, YOUTUBE_VIDEO, TIKTOK_VIDEO]
+export const ALL_SKILLS = [INSTAGRAM_REELS, YOUTUBE_SHORTS, YOUTUBE_VIDEO, TIKTOK_VIDEO, RESEARCH]
