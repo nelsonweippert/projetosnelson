@@ -173,13 +173,12 @@ export function ConteudoClient({ initialContents, areas }: Props) {
 
   async function handleUseIdea(idea: any) {
     const researchText = [
-      `## Pesquisa da Ideia\n`,
-      idea.summary && `📋 **Resumo:** ${idea.summary}`,
-      idea.relevance && `📈 **Relevância e fontes:** ${idea.relevance}`,
-      idea.angle && `💡 **Ângulo:** ${idea.angle}`,
-      idea.source && `📰 **Fontes originais:** ${idea.source}`,
-      `\n---\n\n*Estas fontes devem ser usadas pela editora para buscar imagens, screenshots e dados para o vídeo.*`,
-    ].filter(Boolean).join("\n\n")
+      idea.summary && `📋 ${idea.summary}`,
+      idea.relevance && `\n📈 Relevância: ${idea.relevance}`,
+      idea.angle && `\n💡 Ângulo: ${idea.angle}`,
+      idea.source && `\n📰 Fontes: ${idea.source}`,
+      `\n\n🔗 Use as fontes acima para buscar imagens, screenshots e dados para o vídeo.`,
+    ].filter(Boolean).join("\n")
     startTransition(async () => {
       const result = await createContentAction({
         title: idea.title, hook: idea.hook || undefined,

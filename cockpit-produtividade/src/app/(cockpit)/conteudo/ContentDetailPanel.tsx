@@ -66,6 +66,26 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   const prevPhase = curIdx > 0 ? PHASES[curIdx - 1] : null
   const nextPhase = curIdx < PHASES.length - 1 ? PHASES[curIdx + 1] : null
 
+  // Render text with clickable links
+  function renderTextWithLinks(text: string) {
+    const urlRegex = /(https?:\/\/[^\s\)]+)/g
+    const parts = text.split(urlRegex)
+    return parts.map((part, i) => {
+      if (urlRegex.test(part)) {
+        // Extract display name from URL
+        let display = part
+        try { display = new URL(part).hostname.replace("www.", "") } catch {}
+        return (
+          <a key={i} href={part} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 px-2 py-0.5 bg-accent/10 text-accent text-xs font-medium rounded-lg hover:bg-accent/20 hover:underline transition-colors break-all">
+            🔗 {display}
+          </a>
+        )
+      }
+      return <span key={i}>{part}</span>
+    })
+  }
+
   const isLongForm = content.skill === "LONG_VIDEO" || content.skill === "YOUTUBE_VIDEO"
   const isShorts = content.skill === "YOUTUBE_SHORTS"
   const durationPresets = isLongForm
@@ -329,7 +349,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
                   <div className="px-4 py-2.5 border-b border-blue-500/15">
                     <p className="text-xs font-semibold text-blue-400 flex items-center gap-1.5">📰 Por que esta ideia foi escolhida</p>
                   </div>
-                  <div className="px-4 py-3 text-sm text-cockpit-text whitespace-pre-wrap leading-relaxed">{research}</div>
+                  <div className="px-4 py-3 text-sm text-cockpit-text whitespace-pre-wrap leading-relaxed">{renderTextWithLinks(research)}</div>
                 </div>
               )}
             </>)}

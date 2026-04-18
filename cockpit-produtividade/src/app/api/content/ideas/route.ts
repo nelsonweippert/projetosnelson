@@ -130,13 +130,13 @@ export async function POST(req: NextRequest) {
     // Build context
     let ctx = "DADOS COLETADOS EM TEMPO REAL:\n"
     if (googleTrends.length > 0) { ctx += "\n=== GOOGLE TRENDS BRASIL ===\n"; googleTrends.forEach((t, i) => { ctx += `${i + 1}. ${t.title}\n` }) }
-    if (hackerNews.length > 0) { ctx += "\n=== HACKER NEWS ===\n"; hackerNews.forEach((t, i) => { ctx += `${i + 1}. ${t.title}\n` }) }
+    if (hackerNews.length > 0) { ctx += "\n=== HACKER NEWS ===\n"; hackerNews.forEach((t, i) => { ctx += `${i + 1}. ${t.title}${t.url ? ` (${t.url})` : ""}\n` }) }
     for (const t of terms) {
       const d = perTerm[t.term]
       ctx += `\n=== TERMO: "${t.term}" ===\n`
       if (d.news.length > 0) { ctx += "GOOGLE NEWS:\n"; d.news.forEach((n, i) => { ctx += `${i + 1}. ${n.title}${n.date ? ` [${n.date}]` : ""}\n` }) }
       if (d.yt.length > 0) { ctx += "YOUTUBE:\n"; d.yt.forEach((v, i) => { ctx += `${i + 1}. ${v.title}\n` }) }
-      if (d.reddit.length > 0) { ctx += "REDDIT:\n"; d.reddit.forEach((r, i) => { ctx += `${i + 1}. ${r.title} [${r.source}]\n` }) }
+      if (d.reddit.length > 0) { ctx += "REDDIT:\n"; d.reddit.forEach((r, i) => { ctx += `${i + 1}. ${r.title}${r.url ? ` (${r.url})` : ""} [${r.source}]\n` }) }
     }
     if (userSources.length > 0) { ctx += "\n=== FONTES DO USUÁRIO ===\n"; userSources.forEach((s) => { ctx += `- ${s.title}${s.url ? ` (${s.url})` : ""}\n` }) }
 
@@ -157,8 +157,10 @@ ${ctx}
 Termos permitidos: ${termList}
 Score: 97-100 viral, 94-96 bom, 90-93 ok.
 
-Retorne SOMENTE um JSON array. Sem texto antes ou depois. Campos curtos (1 frase cada):
-[{"title":"titulo","summary":"resumo","angle":"angulo","hook":"hook","term":"termo","relevance":"fonte","source":"fonte","score":95}]`
+INCLUA URLs reais das fontes no campo "relevance" quando disponíveis.
+
+Retorne SOMENTE um JSON array. Sem texto antes ou depois. Campos curtos:
+[{"title":"titulo","summary":"resumo curto","angle":"angulo","hook":"hook curto","term":"termo","relevance":"fonte original + URLs quando disponíveis","source":"Google News","score":95}]`
 
     const start = Date.now()
     const message = await anthropic.messages.create({ model: "claude-sonnet-4-6", max_tokens: 8192, messages: [{ role: "user", content: prompt }] })
