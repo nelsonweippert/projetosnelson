@@ -8,7 +8,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { updateContentAction, advanceContentPhaseAction, archiveContentAction } from "@/app/actions/content.actions"
-import { CONTENT_SKILLS, type SkillId } from "@/config/content-skills"
+import { CONTENT_SKILLS, SKILL_LIST, type SkillId } from "@/config/content-skills"
 import type { Area, ContentPhase } from "@/types"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -297,6 +297,24 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
 
             {/* ═══ IDEALIZAÇÃO ═══ */}
             {content.phase === "IDEATION" && (<>
+              {/* Skill selector */}
+              <div>
+                <p className="text-xs font-medium text-cockpit-muted mb-2">Tipo de conteúdo</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {SKILL_LIST.map((s) => (
+                    <button key={s.id} onClick={() => save({ skill: s.id, platform: s.id === "SHORT_VIDEO" ? "TIKTOK" : s.id === "LONG_VIDEO" ? "YOUTUBE" : "INSTAGRAM", format: s.id === "SHORT_VIDEO" ? "SHORT" : s.id === "LONG_VIDEO" ? "LONG_VIDEO" : "POST" })}
+                      className={cn("flex items-center gap-2 p-3 rounded-xl border transition-all text-left",
+                        content.skill === s.id ? "border-accent bg-accent/10" : "border-cockpit-border hover:border-accent/30")}>
+                      <span className="text-xl">{s.icon}</span>
+                      <div>
+                        <p className={cn("text-xs font-semibold", content.skill === s.id ? "text-accent" : "text-cockpit-text")}>{s.label}</p>
+                        <p className="text-[10px] text-cockpit-muted">{s.description}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {research && (
                 <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 overflow-hidden">
                   <div className="px-4 py-2.5 border-b border-blue-500/15"><p className="text-xs font-semibold text-blue-400 flex items-center gap-1.5">📰 Base de referências</p></div>

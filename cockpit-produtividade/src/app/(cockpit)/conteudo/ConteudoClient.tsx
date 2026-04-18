@@ -82,7 +82,6 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   const [ideasLoaded, setIdeasLoaded] = useState(false)
   const [newTerm, setNewTerm] = useState("")
   const [generatingIdeas, setGeneratingIdeas] = useState(false)
-  const [ideaSkillPick, setIdeaSkillPick] = useState<{ idea: any; picking: boolean } | null>(null)
   const [ideaTermFilter, setIdeaTermFilter] = useState<string>("")
   const [showUsedIdeas, setShowUsedIdeas] = useState(false)
   const [customIdeaInput, setCustomIdeaInput] = useState("")
@@ -156,10 +155,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
     setCustomIdeaInput("")
   }
 
-  async function handleCreateFromIdea(idea: any, skillId: SkillId) {
-    const platform = skillId === "SHORT_VIDEO" ? "TIKTOK" : skillId === "LONG_VIDEO" ? "YOUTUBE" : "INSTAGRAM"
-    const format = skillId === "SHORT_VIDEO" ? "SHORT" : skillId === "LONG_VIDEO" ? "LONG_VIDEO" : "POST"
-    // Build research from idea data — includes sources for the editor
+  async function handleUseIdea(idea: any) {
     const researchText = [
       `## Pesquisa da Ideia\n`,
       idea.summary && `📋 **Resumo:** ${idea.summary}`,
@@ -170,17 +166,15 @@ export function ConteudoClient({ initialContents, areas }: Props) {
     ].filter(Boolean).join("\n\n")
     startTransition(async () => {
       const result = await createContentAction({
-        title: idea.title, hook: idea.hook || undefined, platform, format,
-        skill: skillId, areaIds: [], ideaFeedId: idea.id,
-        research: researchText || undefined,
+        title: idea.title, hook: idea.hook || undefined,
+        ideaFeedId: idea.id, research: researchText || undefined,
       })
       if (result.success) {
         setContents((prev) => [result.data as Content, ...prev])
         await markIdeaUsedAction(idea.id)
-        setIdeaFeed((p) => p.filter((i) => i.id !== idea.id))
-        setIdeaSkillPick(null)
-        // Go directly to elaboration
-        await advanceContentPhaseAction((result.data as any).id, "ELABORATION")
+        setIdeaFeed((p) => p.map((i) => i.id === idea.id ? { ...i, isUsed: true } : i))
+        // Open content in idealização for skill/duration selection
+        setSelectedContent(result.data as Content)
       }
     })
   }
@@ -776,21 +770,11 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                             ) : (
                               <span className="px-3 py-1.5 text-[11px] font-medium text-cockpit-muted bg-cockpit-border-light rounded-lg">Sem conteúdo</span>
                             )
-                          })() : ideaSkillPick?.idea?.id === idea.id ? (
-                            <div className="flex flex-col gap-1">
-                              {SKILL_LIST.map((s) => (
-                                <button key={s.id} onClick={() => handleCreateFromIdea(idea, s.id)} disabled={isPending}
-                                  className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium rounded-lg border border-cockpit-border text-cockpit-text hover:border-accent/40 hover:bg-accent/5 disabled:opacity-50">
-                                  {s.icon} {s.label}
-                                </button>
-                              ))}
-                              <button onClick={() => setIdeaSkillPick(null)} className="text-[10px] text-cockpit-muted hover:text-cockpit-text mt-0.5">Cancelar</button>
-                            </div>
-                          ) : (
+                          })() : (
                             <>
-                              <button onClick={() => setIdeaSkillPick({ idea, picking: true })}
-                                className="flex items-center gap-1 px-3 py-1.5 bg-accent text-black text-[11px] font-semibold rounded-lg hover:bg-accent-hover">
-                                <Plus size={12} /> Criar
+                              <button onClick={() => handleUseIdea(idea)} disabled={isPending}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-accent text-black text-[11px] font-semibold rounded-lg hover:bg-accent-hover disabled:opacity-50">
+                                <Plus size={12} /> Utilizar
                               </button>
                               <button onClick={() => handleDiscardIdea(idea.id)}
                                 className="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-3 py-1.5 text-[11px] text-cockpit-muted hover:text-red-400 rounded-lg border border-cockpit-border hover:border-red-400/30">
