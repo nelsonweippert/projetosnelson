@@ -121,16 +121,24 @@ export function ConteudoClient({ initialContents, areas }: Props) {
     setGeneratingIdeas(true)
     setIdeaError(null)
     try {
-      const res = await fetch("/api/content/ideas", { method: "POST" })
-      const data = await res.json()
-      if (res.ok) {
-        setIdeaFeed(data.ideas ?? [])
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 115000)
+      const res = await fetch("/api/content/ideas", { method: "POST", signal: controller.signal })
+      clearTimeout(timeout)
+      let data
+      try { data = await res.json() } catch { data = { error: `Status ${res.status}: resposta não é JSON` } }
+      if (res.ok && data.ideas) {
+        setIdeaFeed(data.ideas)
         if (data.created === 0) setIdeaError("Nenhuma ideia gerada. Tente novamente.")
       } else {
-        setIdeaError(data.error || "Erro ao gerar ideias")
+        setIdeaError(data.error || `Erro ${res.status}`)
       }
-    } catch (err) {
-      setIdeaError("Erro de conexão. Verifique se o app está rodando.")
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        setIdeaError("Timeout: a pesquisa demorou mais de 2 minutos. Tente novamente.")
+      } else {
+        setIdeaError(`Erro: ${err?.message || "conexão falhou"}`)
+      }
     }
     setGeneratingIdeas(false)
   }
@@ -143,18 +151,24 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   async function handleCustomIdea() {
     if (!customIdeaInput.trim()) return
     setCustomIdeaLoading(true)
+    setIdeaError(null)
     try {
       const res = await fetch("/api/content/ideas/custom", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ description: customIdeaInput, term: customIdeaTerm || undefined }),
       })
-      if (res.ok) {
-        const data = await res.json()
-        if (data.ideas) setIdeaFeed(data.ideas)
+      let data
+      try { data = await res.json() } catch { data = { error: `Status ${res.status}` } }
+      if (res.ok && data.ideas) {
+        setIdeaFeed(data.ideas)
+        setCustomIdeaInput("")
+      } else {
+        setIdeaError(data.error || `Erro ${res.status}`)
       }
-    } catch {}
+    } catch (err: any) {
+      setIdeaError(`Erro: ${err?.message || "conexão falhou"}`)
+    }
     setCustomIdeaLoading(false)
-    setCustomIdeaInput("")
   }
 
   async function handleUseIdea(idea: any) {
