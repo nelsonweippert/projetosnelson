@@ -983,7 +983,6 @@ export function ConteudoClient({ initialContents, areas }: Props) {
             })}
           </div>
         )}
-      </div>
 
         {/* ═══ TAB: USO DA API ═══ */}
         {tab === "usage" && (
@@ -1120,6 +1119,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
             )}
           </div>
         )}
+
       </div>
 
       {/* Detail Panel */}
