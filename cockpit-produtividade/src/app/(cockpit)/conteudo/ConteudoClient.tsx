@@ -663,30 +663,30 @@ export function ConteudoClient({ initialContents, areas }: Props) {
               </div>
             </div>
 
-            {/* Filters — all terms from feed + monitored */}
+            {/* Filters — only monitored terms + "Outros" */}
             {ideaFeed.length > 0 && (() => {
-              // Collect all unique terms: monitored + from feed
               const monitoredTermNames = monitorTerms.filter((t: any) => t.isActive).map((t: any) => t.term)
-              const feedTerms = [...new Set(ideaFeed.filter((i: any) => !i.isUsed).map((i: any) => i.term).filter(Boolean))]
-              const allTerms = [...new Set([...monitoredTermNames, ...feedTerms])]
-
-              // Auto-select first term if none selected
-              if (!ideaTermFilter && allTerms.length > 0) setIdeaTermFilter(allTerms[0])
-
+              const othersCount = ideaFeed.filter((i: any) => !i.isUsed && !monitoredTermNames.includes(i.term)).length
               const usedWithContent = ideaFeed.filter((i: any) => i.isUsed && contents.some((c: Content) => c.ideaFeedId === i.id || c.title === i.title)).length
+
+              if (!ideaTermFilter && monitoredTermNames.length > 0) setIdeaTermFilter(monitoredTermNames[0])
 
               return (
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1 flex-wrap">
-                    {allTerms.map((term) => {
+                    {monitoredTermNames.map((term) => {
                       const count = ideaFeed.filter((i: any) => !i.isUsed && i.term === term).length
-                      const isMonitored = monitoredTermNames.includes(term)
                       return (
                         <button key={term} onClick={() => setIdeaTermFilter(term)} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", ideaTermFilter === term ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
-                          {!isMonitored && "💡 "}{term} <span className="text-[10px] opacity-70 ml-1">{count}</span>
+                          {term} <span className="text-[10px] opacity-70 ml-1">{count}</span>
                         </button>
                       )
                     })}
+                    {othersCount > 0 && (
+                      <button onClick={() => setIdeaTermFilter("__others__")} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", ideaTermFilter === "__others__" ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
+                        Outros <span className="text-[10px] opacity-70 ml-1">{othersCount}</span>
+                      </button>
+                    )}
                   </div>
                   {usedWithContent > 0 && (
                     <button onClick={() => setShowUsedIdeas(!showUsedIdeas)} className={cn("px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors", showUsedIdeas ? "border-accent/30 bg-accent/10 text-accent" : "border-cockpit-border text-cockpit-muted hover:text-cockpit-text")}>
@@ -718,7 +718,14 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                     }
                     return true
                   })
-                  .filter((i: any) => !ideaTermFilter || i.term === ideaTermFilter)
+                  .filter((i: any) => {
+                    if (!ideaTermFilter) return true
+                    if (ideaTermFilter === "__others__") {
+                      const monitored = monitorTerms.filter((t: any) => t.isActive).map((t: any) => t.term)
+                      return !monitored.includes(i.term)
+                    }
+                    return i.term === ideaTermFilter
+                  })
                   .map((idea: any) => (
                   <div key={idea.id} className={cn("cockpit-card !p-0 group transition-colors", idea.isUsed ? "opacity-60" : "hover:border-accent/30")}>
                     <div className="px-5 py-4">
