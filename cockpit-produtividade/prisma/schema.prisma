@@ -31,6 +31,7 @@ model User {
   apiUsage       ApiUsage[]
   monitorTerms   MonitorTerm[]
   ideaFeed       IdeaFeed[]
+  newsEvidence   NewsEvidence[]
 
   @@map("users")
 }
@@ -448,25 +449,67 @@ model MonitorTerm {
 }
 
 model IdeaFeed {
-  id          String   @id @default(cuid())
-  title       String
-  summary     String
-  angle       String?
-  source      String?
-  relevance   String?
-  hook        String?
-  term        String
-  score       Int      @default(90)
-  isUsed      Boolean  @default(false)
-  isDiscarded Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id            String    @id @default(cuid())
+  title         String
+  summary       String
+  angle         String?
+  source        String?
+  sourceUrl     String?
+  publishedAt   DateTime?
+  language      String?   @default("pt-BR")
+  pioneerScore  Int?
+  relevance     String?
+  hook          String?
+  term          String
+  score         Int       @default(90)
+  // Ancoragem em evidência real (research-first)
+  evidenceId           String?
+  evidence             NewsEvidence? @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
+  evidenceQuote        String?    // trecho verbatim da matéria primária
+  supportingEvidenceIds String[] @default([]) // IDs de matérias de apoio (triangulação)
+  isUsed        Boolean   @default(false)
+  isDiscarded   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([userId, isUsed, isDiscarded])
+  @@index([userId, publishedAt])
+  @@index([evidenceId])
   @@map("idea_feed")
+}
+
+// ========================================
+// News Evidence — Fase A do radar (captura real de matérias)
+// ========================================
+
+model NewsEvidence {
+  id              String    @id @default(cuid())
+  term            String    // qual termo monitorado capturou essa evidência
+  url             String    // URL canônica da matéria
+  title           String
+  publishedAt     DateTime?
+  summary         String    // resumo de 2-3 frases baseado no que foi FETCHED
+  keyQuote        String?   // trecho verbatim marcante (10-40 palavras)
+  sourceAuthority String    @default("UNKNOWN") // TIER_1 | TIER_2 | BLOG | AGGREGATOR | UNKNOWN
+  language        String    @default("pt-BR")   // pt-BR | en | es
+  relevanceScore  Int       @default(50)        // 0-100 — quão forte ancora no termo
+  freshnessHours  Int?      // horas desde publicação (estimativa no momento da captura)
+  processed       Boolean   @default(false)     // virou ideia?
+  capturedAt      DateTime  @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  ideas IdeaFeed[]
+
+  @@unique([userId, url])
+  @@index([userId, capturedAt])
+  @@index([userId, term, capturedAt])
+  @@index([userId, processed])
+  @@map("news_evidence")
 }
 
 // ========================================

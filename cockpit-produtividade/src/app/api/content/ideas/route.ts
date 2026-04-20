@@ -200,7 +200,7 @@ Retorne SOMENTE um JSON array. Sem texto antes ou depois. Campos curtos:
 
     const start = Date.now()
     const message = await anthropic.messages.create({ model: "claude-sonnet-4-6", max_tokens: 8192, messages: [{ role: "user", content: prompt }] })
-    trackUsage("generate_ideas", message.usage?.input_tokens ?? 0, message.usage?.output_tokens ?? 0, Date.now() - start, userId).catch(() => {})
+    trackUsage("claude-sonnet-4-6", "generate_ideas", message.usage?.input_tokens ?? 0, message.usage?.output_tokens ?? 0, Date.now() - start, userId).catch(() => {})
     const text = message.content[0]
     if (text.type !== "text") return NextResponse.json({ error: "Erro IA" }, { status: 500 })
 

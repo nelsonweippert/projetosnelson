@@ -21,7 +21,11 @@ export async function POST(req: NextRequest) {
       term: idea.term,
       relevance: idea.relevance || null,
       source: idea.source || "agent",
-      score: Math.min(100, Math.max(90, idea.score || 90)),
+      sourceUrl: idea.sourceUrl || null,
+      publishedAt: idea.publishedAt ? new Date(idea.publishedAt) : null,
+      language: idea.language || "pt-BR",
+      pioneerScore: typeof idea.pioneerScore === "number" ? idea.pioneerScore : null,
+      score: Math.min(100, Math.max(0, idea.score ?? idea.pioneerScore ?? 90)),
       userId,
     })),
   })

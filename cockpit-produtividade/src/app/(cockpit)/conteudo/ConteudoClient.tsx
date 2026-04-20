@@ -627,10 +627,15 @@ export function ConteudoClient({ initialContents, areas }: Props) {
             <div className="cockpit-card">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider">Termos monitorados</h3>
-                <button onClick={handleGenerateIdeas} disabled={generatingIdeas || monitorTerms.filter((t) => t.isActive).length === 0}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-accent/10 text-accent text-xs font-semibold border border-accent/20 rounded-xl hover:bg-accent/20 disabled:opacity-50">
-                  {generatingIdeas ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} {generatingIdeas ? "Pesquisando..." : "Gerar ideias agora"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <a href="/conteudo/radar" className="text-[11px] text-cockpit-muted hover:text-accent hover:underline">
+                    📡 Ver radar
+                  </a>
+                  <button onClick={handleGenerateIdeas} disabled={generatingIdeas || monitorTerms.filter((t) => t.isActive).length === 0}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-accent/10 text-accent text-xs font-semibold border border-accent/20 rounded-xl hover:bg-accent/20 disabled:opacity-50">
+                    {generatingIdeas ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} {generatingIdeas ? "Pesquisando..." : "Gerar ideias agora"}
+                  </button>
+                </div>
               </div>
               {ideaError && (
                 <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 mb-3">{ideaError}</div>
@@ -771,9 +776,35 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                           <p className="text-xs text-cockpit-muted mt-1 line-clamp-2">{idea.summary}</p>
                           <div className="flex flex-wrap items-center gap-2 mt-2">
                             {idea.term && <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent">{idea.term}</span>}
-                            {idea.source && idea.source !== "ai_research" && idea.source !== "ai_generated" && idea.source !== "cron" && <span className="text-[10px] text-cockpit-muted">📰 {idea.source}</span>}
+                            {idea.evidenceId && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 font-semibold" title={idea.evidenceQuote ? `"${idea.evidenceQuote}"` : "Ancorada em evidência real"}>
+                                ✓ matéria real
+                              </span>
+                            )}
+                            {idea.supportingEvidenceIds?.length > 0 && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-600 font-semibold" title={`${idea.supportingEvidenceIds.length} fonte(s) adicional(is) confirmam o mesmo fato`}>
+                                🔗 {idea.supportingEvidenceIds.length + 1} fontes
+                              </span>
+                            )}
+                            {idea.sourceUrl ? (
+                              <a href={idea.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-cockpit-muted hover:text-accent hover:underline">
+                                📰 {idea.source ?? (() => { try { return new URL(idea.sourceUrl).hostname.replace("www.","") } catch { return "fonte" } })()}
+                              </a>
+                            ) : (
+                              idea.source && idea.source !== "ai_research" && idea.source !== "ai_generated" && idea.source !== "cron" && <span className="text-[10px] text-cockpit-muted">📰 {idea.source}</span>
+                            )}
+                            {idea.publishedAt && (
+                              <span className="text-[10px] text-cockpit-muted">
+                                🕐 {new Date(idea.publishedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            )}
                             {idea.angle && <span className="text-[10px] text-cockpit-muted">💡 {idea.angle}</span>}
                           </div>
+                          {idea.evidenceQuote && (
+                            <blockquote className="text-[11px] italic text-cockpit-muted mt-1.5 pl-2 border-l-2 border-emerald-500/40">
+                              "{idea.evidenceQuote}"
+                            </blockquote>
+                          )}
                           {idea.relevance && <p className="text-[10px] text-cockpit-muted mt-1.5 whitespace-pre-wrap">📈 {idea.relevance.split(/(https?:\/\/[^\s\)]+)/g).map((part: string, j: number) => /^https?:\/\//.test(part) ? <a key={j} href={part} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-accent/10 text-accent text-[9px] font-medium rounded hover:underline">🔗 {(() => { try { return new URL(part).hostname.replace("www.","") } catch { return part.substring(0,30) } })()}</a> : <span key={j}>{part}</span>)}</p>}
                           {idea.hook && <p className="text-xs text-cockpit-muted mt-2 italic border-l-2 border-accent/30 pl-2">Hook: "{idea.hook}"</p>}
                         </div>

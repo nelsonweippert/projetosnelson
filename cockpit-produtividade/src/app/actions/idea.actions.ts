@@ -83,50 +83,59 @@ export async function generateIdeasNowAction(): Promise<ActionResult> {
     const terms = await db.monitorTerm.findMany({ where: { userId, isActive: true } })
     if (terms.length === 0) return { success: false, error: "Adicione termos de monitoramento primeiro" }
 
-    const { generateContentSuggestion } = await import("@/services/ai.service")
+    const { generateIdeasWithResearch } = await import("@/services/ai.service")
+    const termNames = terms.map((t) => t.term)
 
-    const allTerms = terms.map((t) => t.term).join(", ")
-    const prompt = `Você é um pesquisador de tendências de conteúdo digital.
+    const { ideas, usage } = await generateIdeasWithResearch({
+      terms: termNames,
+      ideasPerTerm: 2,
+      hoursWindow: 72,
+      language: "both",
+      userId,
+    })
 
-Termos monitorados: ${allTerms}
-
-Pesquise as tendências, notícias e assuntos mais quentes e relevantes AGORA sobre esses temas.
-Gere 10 ideias de conteúdo baseadas em novidades REAIS e tendências ATUAIS.
-
-Retorne APENAS um JSON array (sem markdown, sem code blocks):
-[{
-  "title": "título da ideia",
-  "summary": "resumo em 2-3 frases do que trata e por que é relevante agora",
-  "angle": "ângulo único para abordar este tema",
-  "hook": "sugestão de hook para os primeiros segundos",
-  "term": "termo monitorado principal relacionado",
-  "relevance": "por que é tendência agora (dado, contexto ou timing)"
-}]`
-
-    const result = await generateContentSuggestion(
-      "Você é um pesquisador de tendências. Retorne APENAS JSON válido, sem markdown.",
-      prompt
-    )
-
-    const ideas = JSON.parse(result.replace(/```json?\n?/g, "").replace(/```/g, "").trim())
+    if (ideas.length === 0) {
+      return { success: false, error: "Nenhuma notícia relevante encontrada nas últimas 72h para os termos monitorados. Tente ampliar os termos ou voltar mais tarde." }
+    }
 
     const created = await db.ideaFeed.createMany({
-      data: ideas.map((idea: any) => ({
+      data: ideas.map((idea) => ({
         title: idea.title,
         summary: idea.summary,
-        angle: idea.angle || null,
-        hook: idea.hook || null,
-        term: idea.term || allTerms,
-        relevance: idea.relevance || null,
-        source: "ai_generated",
+        angle: idea.angle,
+        hook: idea.hook,
+        term: idea.term,
+        relevance: idea.relevance,
+        source: idea.sourceTitle,
+        sourceUrl: idea.sourceUrl,
+        publishedAt: idea.publishedAt ? new Date(idea.publishedAt) : null,
+        language: idea.language ?? "pt-BR",
+        pioneerScore: idea.pioneerScore,
+        evidenceId: idea.evidenceId,
+        evidenceQuote: idea.evidenceQuote,
+        supportingEvidenceIds: idea.supportingEvidenceIds,
+        score: Math.min(100, Math.max(0, idea.pioneerScore)),
         userId,
       })),
     })
 
+    console.log(`[generateIdeasNow] user=${userId} rss=${usage.candidatesFromRss} qualified=${usage.qualifiedAfterTriage} supporting=${usage.supportingFound} ideas=${created.count} searches=${usage.searchesUsed} fetches=${usage.fetchesUsed}`)
+
     revalidatePath("/conteudo")
-    return { success: true, data: { count: created.count } }
+    revalidatePath("/conteudo/radar")
+    return {
+      success: true,
+      data: {
+        count: created.count,
+        candidatesFromRss: usage.candidatesFromRss,
+        qualifiedAfterTriage: usage.qualifiedAfterTriage,
+        supportingFound: usage.supportingFound,
+        evidencesCaptured: usage.evidencesCaptured,
+      },
+    }
   } catch (err) {
     console.error("[generateIdeasNow]", err)
-    return { success: false, error: "Erro ao gerar ideias" }
+    const msg = err instanceof Error ? err.message : "Erro ao gerar ideias"
+    return { success: false, error: msg }
   }
 }

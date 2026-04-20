@@ -1,23 +1,20 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { generateContentSuggestion } from "@/services/ai.service"
+import { generateIdeasWithResearch } from "@/services/ai.service"
 
-export const maxDuration = 60
+export const maxDuration = 300
 
 export async function GET(req: NextRequest) {
-  // Verify cron secret
   const authHeader = req.headers.get("authorization")
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  // Get all users with active monitor terms
   const usersWithTerms = await db.monitorTerm.findMany({
     where: { isActive: true },
     select: { userId: true, term: true },
   })
 
-  // Group terms by user
   const byUser: Record<string, string[]> = {}
   for (const { userId, term } of usersWithTerms) {
     if (!byUser[userId]) byUser[userId] = []
@@ -25,66 +22,53 @@ export async function GET(req: NextRequest) {
   }
 
   let totalCreated = 0
+  const perUserStats: Array<{ userId: string; terms: number; ideas: number; error?: string }> = []
 
   for (const [userId, terms] of Object.entries(byUser)) {
     try {
-      const allTerms = terms.join(", ")
-      const prompt = `Você é um pesquisador de tendências de conteúdo digital.
-
-Termos monitorados: ${allTerms}
-
-Pesquise as tendências, notícias e assuntos mais quentes e relevantes HOJE sobre esses temas.
-Gere ideias distribuídas IGUALMENTE entre os termos.
-
-IMPORTANTE: O campo "term" DEVE ser EXATAMENTE um destes valores:
-${terms.map((t) => `- "${t}"`).join("\n")}
-
-Retorne APENAS um JSON array:
-[{
-  "title": "título da ideia",
-  "summary": "resumo em 2-3 frases",
-  "angle": "ângulo único para abordar",
-  "hook": "sugestão de hook",
-  "term": "EXATAMENTE um dos termos listados acima",
-  "relevance": "por que é tendência agora",
-  "source": "fonte da informação",
-  "score": 95
-}]`
-
-      const result = await generateContentSuggestion(
-        "Retorne APENAS JSON válido, sem markdown.",
-        prompt
-      )
-
-      const ideas = JSON.parse(result.replace(/```json?\n?/g, "").replace(/```/g, "").trim())
-
-      // Force match terms
-      const termNames = terms
-      const validIdeas = ideas.filter((i: any) => i.title && i.summary).map((i: any) => {
-        let matched = termNames.find((t) => t === i.term)
-        if (!matched) matched = termNames.find((t) => i.title?.toLowerCase().includes(t.toLowerCase().split(/\s+/)[0])) || termNames[0]
-        return { ...i, term: matched }
+      const { ideas, usage } = await generateIdeasWithResearch({
+        terms,
+        ideasPerTerm: 2,
+        hoursWindow: 72,
+        language: "both",
+        userId,
       })
 
       const created = await db.ideaFeed.createMany({
-        data: validIdeas.map((idea: any) => ({
+        data: ideas.map((idea) => ({
           title: idea.title,
           summary: idea.summary,
-          angle: idea.angle || null,
-          hook: idea.hook || null,
+          angle: idea.angle,
+          hook: idea.hook,
           term: idea.term,
-          relevance: idea.relevance || null,
-          source: idea.source || "cron",
-          score: Math.min(100, Math.max(90, idea.score || 90)),
+          relevance: idea.relevance,
+          source: idea.sourceTitle,
+          sourceUrl: idea.sourceUrl,
+          publishedAt: idea.publishedAt ? new Date(idea.publishedAt) : null,
+          language: idea.language ?? "pt-BR",
+          pioneerScore: idea.pioneerScore,
+          evidenceId: idea.evidenceId,
+          evidenceQuote: idea.evidenceQuote,
+          supportingEvidenceIds: idea.supportingEvidenceIds,
+          score: Math.min(100, Math.max(0, idea.pioneerScore)),
           userId,
         })),
       })
 
       totalCreated += created.count
+      perUserStats.push({ userId, terms: terms.length, ideas: created.count })
+      console.log(`[cron/ideas] user=${userId} rss=${usage.candidatesFromRss} qualified=${usage.qualifiedAfterTriage} supporting=${usage.supportingFound} ideas=${created.count} searches=${usage.searchesUsed} fetches=${usage.fetchesUsed} cacheRead=${usage.cacheReadTokens}`)
     } catch (err) {
-      console.error(`[cron/ideas] Error for user ${userId}:`, err)
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`[cron/ideas] user=${userId} error:`, msg)
+      perUserStats.push({ userId, terms: terms.length, ideas: 0, error: msg })
     }
   }
 
-  return NextResponse.json({ ok: true, usersProcessed: Object.keys(byUser).length, ideasCreated: totalCreated })
+  return NextResponse.json({
+    ok: true,
+    usersProcessed: Object.keys(byUser).length,
+    ideasCreated: totalCreated,
+    perUser: perUserStats,
+  })
 }
