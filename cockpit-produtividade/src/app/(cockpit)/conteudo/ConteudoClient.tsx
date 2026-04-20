@@ -6,11 +6,12 @@ import {
   Search, SlidersHorizontal, LayoutGrid, List, Lightbulb,
   BarChart3, Workflow, BookOpen, TrendingUp, Clock, CheckCircle,
   ExternalLink, Link, Trash2, Send, FileText, ChevronDown, ChevronUp, Activity,
+  Edit2,
 } from "lucide-react"
 import { cn, formatDate } from "@/lib/utils"
 import { createContentAction, archiveContentAction, advanceContentPhaseAction } from "@/app/actions/content.actions"
 import { getSkillSourcesAction, addSkillSourceAction, deleteSkillSourceAction } from "@/app/actions/skill.actions"
-import { getMonitorTermsAction, addMonitorTermAction, deleteMonitorTermAction, getIdeasAction, discardIdeaAction, markIdeaUsedAction, generateIdeasNowAction } from "@/app/actions/idea.actions"
+import { getMonitorTermsAction, addMonitorTermAction, deleteMonitorTermAction, updateMonitorTermIntentAction, getIdeasAction, discardIdeaAction, markIdeaUsedAction, generateIdeasNowAction } from "@/app/actions/idea.actions"
 import { CONTENT_SKILLS, SKILL_LIST, ALL_SKILLS, type SkillId } from "@/config/content-skills"
 import type { Area, ContentPhase, Platform, ContentFormat } from "@/types"
 import { DatePicker } from "@/components/ui/DatePicker"
@@ -81,6 +82,9 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   const [ideaFeed, setIdeaFeed] = useState<any[]>([])
   const [ideasLoaded, setIdeasLoaded] = useState(false)
   const [newTerm, setNewTerm] = useState("")
+  const [newTermIntent, setNewTermIntent] = useState("")
+  const [editingIntentId, setEditingIntentId] = useState<string | null>(null)
+  const [editingIntentText, setEditingIntentText] = useState("")
   const [generatingIdeas, setGeneratingIdeas] = useState(false)
   const [ideaTermFilter, setIdeaTermFilter] = useState<string>("")
   const [showUsedIdeas, setShowUsedIdeas] = useState(false)
@@ -108,8 +112,27 @@ export function ConteudoClient({ initialContents, areas }: Props) {
 
   async function handleAddTerm() {
     if (!newTerm.trim()) return
-    const res = await addMonitorTermAction(newTerm.trim())
-    if (res.success) { setMonitorTerms((p) => [res.data as any, ...p]); setNewTerm("") }
+    const res = await addMonitorTermAction(newTerm.trim(), newTermIntent.trim() || undefined)
+    if (res.success) {
+      setMonitorTerms((p) => [res.data as any, ...p])
+      setNewTerm("")
+      setNewTermIntent("")
+    }
+  }
+
+  function startEditIntent(id: string, current?: string | null) {
+    setEditingIntentId(id)
+    setEditingIntentText(current ?? "")
+  }
+
+  async function saveIntent() {
+    if (!editingIntentId) return
+    const res = await updateMonitorTermIntentAction(editingIntentId, editingIntentText)
+    if (res.success) {
+      setMonitorTerms((p) => p.map((t) => t.id === editingIntentId ? { ...t, intent: editingIntentText.trim() || null } : t))
+      setEditingIntentId(null)
+      setEditingIntentText("")
+    }
   }
 
   async function handleDeleteTerm(id: string) {
@@ -640,26 +663,59 @@ export function ConteudoClient({ initialContents, areas }: Props) {
               {ideaError && (
                 <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 mb-3">{ideaError}</div>
               )}
-              <div className="flex flex-wrap gap-2 mb-3">
+              <div className="space-y-2 mb-3">
                 {monitorTerms.map((t: any) => (
-                  <span key={t.id} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border", t.isActive ? "border-accent/30 bg-accent/10 text-accent" : "border-cockpit-border text-cockpit-muted line-through")}>
-                    {t.term}
-                    <button onClick={() => handleDeleteTerm(t.id)} className="text-cockpit-muted hover:text-red-400"><X size={11} /></button>
-                  </span>
+                  <div key={t.id} className="border border-cockpit-border rounded-xl p-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={cn("flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold", t.isActive ? "bg-accent/10 text-accent" : "bg-cockpit-border-light text-cockpit-muted line-through")}>
+                        {t.term}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => startEditIntent(t.id, t.intent)} className="p-1 text-cockpit-muted hover:text-accent rounded" title="Editar foco/exclusões">
+                          <Edit2 size={12} />
+                        </button>
+                        <button onClick={() => handleDeleteTerm(t.id)} className="p-1 text-cockpit-muted hover:text-red-400 rounded">
+                          <X size={12} />
+                        </button>
+                      </div>
+                    </div>
+                    {editingIntentId === t.id ? (
+                      <div className="mt-2 space-y-1.5">
+                        <textarea value={editingIntentText} onChange={(e) => setEditingIntentText(e.target.value)} rows={3}
+                          placeholder='Ex: foco em Anthropic, OpenAI, APIs de LLM. EXCLUIR: IA em animais, arte, ciências naturais'
+                          className="w-full px-2 py-1.5 bg-cockpit-bg border border-accent/40 rounded-lg text-xs text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
+                        <div className="flex gap-1.5">
+                          <button onClick={saveIntent} className="px-2.5 py-1 bg-accent text-black text-[11px] font-semibold rounded-lg hover:bg-accent-hover">Salvar</button>
+                          <button onClick={() => setEditingIntentId(null)} className="px-2.5 py-1 text-[11px] text-cockpit-muted border border-cockpit-border rounded-lg hover:text-cockpit-text">Cancelar</button>
+                        </div>
+                      </div>
+                    ) : t.intent ? (
+                      <p className="text-[11px] text-cockpit-muted mt-1.5 leading-snug">🎯 {t.intent}</p>
+                    ) : (
+                      <button onClick={() => startEditIntent(t.id, null)} className="text-[11px] text-cockpit-muted hover:text-accent mt-1 italic">
+                        + adicionar foco (recomendado pra evitar matérias fora do tema)
+                      </button>
+                    )}
+                  </div>
                 ))}
                 {monitorTerms.length === 0 && <p className="text-xs text-cockpit-muted">Nenhum termo. Adicione temas para monitorar.</p>}
               </div>
-              <div className="flex items-center gap-2">
-                <input type="text" value={newTerm} onChange={(e) => setNewTerm(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleAddTerm() }}
-                  placeholder="Ex: inteligência artificial, crypto, produtividade..."
-                  className="flex-1 px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
-                <button onClick={handleAddTerm} disabled={!newTerm.trim()}
-                  className="px-3 py-2 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover disabled:opacity-50">
-                  <Plus size={14} />
-                </button>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <input type="text" value={newTerm} onChange={(e) => setNewTerm(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) handleAddTerm() }}
+                    placeholder="Ex: inteligência artificial, crypto, produtividade..."
+                    className="flex-1 px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
+                  <button onClick={handleAddTerm} disabled={!newTerm.trim()}
+                    className="px-3 py-2 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover disabled:opacity-50">
+                    <Plus size={14} />
+                  </button>
+                </div>
+                <textarea value={newTermIntent} onChange={(e) => setNewTermIntent(e.target.value)} rows={2}
+                  placeholder='Foco/exclusões (opcional mas recomendado). Ex: "foco em Anthropic, OpenAI, APIs. EXCLUIR: IA em animais, arte"'
+                  className="w-full px-3 py-1.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-xs text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
               </div>
-              <p className="text-[10px] text-cockpit-muted mt-2">O sistema busca tendências diariamente às 8h com base nesses termos.</p>
+              <p className="text-[10px] text-cockpit-muted mt-2">O sistema busca tendências diariamente às 8h. O foco ajuda a triagem descartar matérias fora do seu tema.</p>
             </div>
 
             {/* Custom idea input */}

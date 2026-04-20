@@ -21,13 +21,28 @@ export async function getMonitorTermsAction(): Promise<ActionResult> {
   } catch { return { success: false, error: "Erro ao buscar termos" } }
 }
 
-export async function addMonitorTermAction(term: string): Promise<ActionResult> {
+export async function addMonitorTermAction(term: string, intent?: string): Promise<ActionResult> {
   try {
     const userId = await getUserId()
-    const created = await db.monitorTerm.create({ data: { term, userId } })
+    const created = await db.monitorTerm.create({
+      data: { term, intent: intent?.trim() || null, userId },
+    })
     revalidatePath("/conteudo")
     return { success: true, data: created }
   } catch { return { success: false, error: "Erro ao adicionar termo" } }
+}
+
+export async function updateMonitorTermIntentAction(id: string, intent: string): Promise<ActionResult> {
+  try {
+    const userId = await getUserId()
+    const clean = intent.trim()
+    await db.monitorTerm.update({
+      where: { id, userId },
+      data: { intent: clean.length > 0 ? clean : null },
+    })
+    revalidatePath("/conteudo")
+    return { success: true, data: null }
+  } catch { return { success: false, error: "Erro ao atualizar intenção" } }
 }
 
 export async function toggleMonitorTermAction(id: string, isActive: boolean): Promise<ActionResult> {

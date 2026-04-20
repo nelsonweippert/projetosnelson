@@ -166,35 +166,56 @@ const TriageResponseSchema = z.object({ items: z.array(TriageItemSchema) })
 type TriageItem = z.infer<typeof TriageItemSchema>
 
 function buildTriageSystemPrompt(): string {
-  return `Você é ANALISTA DE NOTÍCIAS. Recebe uma lista de candidatos (pré-selecionados por feeds RSS determinísticos) e precisa LER cada um via web_fetch e classificar.
+  return `Você é ANALISTA DE NOTÍCIAS. Recebe candidatos pré-selecionados por RSS e precisa LER cada um via web_fetch e classificar.
 
 REGRAS INEGOCIÁVEIS
 - VOCÊ NÃO GERA IDEIAS DE CONTEÚDO. Apenas avalia.
 - Para cada candidato, use web_fetch NA URL fornecida. Se falhar, marque reject=true.
 - canonicalUrl: extraia do meta og:url ou do URL final pós-redirect.
 - keyQuote DEVE ser verbatim do corpo. Se não consegue citar, você não leu.
-- relevanceScore honesto: 90+ só se DIRETAMENTE sobre o termo. Tangencial (o termo aparece mas não é foco) = 60-70 → rejeitar.
-- reject=true se: relevance<70, falhou leitura, é opinião sem fato, repost, > 72h.
-- topicKeywords: específicos do FATO (nome evento, pessoa, produto) pro aprofundamento.
+
+RELEVÂNCIA ≠ CORRESPONDÊNCIA LITERAL
+- Cada termo tem uma INTENÇÃO declarada pelo usuário (foco + exclusões).
+- relevanceScore = quão bem a matéria se encaixa na INTENÇÃO, não só no termo literal.
+- Matéria pode ser "sobre o termo" mas FORA da intenção — isso é REJECT.
+  Ex: termo="IA" com intent "foco em APIs de LLM, EXCLUIR IA em animais/arte".
+  Matéria sobre "IA traduz latidos de cães" = literalmente IA, mas é reject (viola exclusões).
+- 90+ só quando a matéria cai exatamente no foco declarado.
+- 80-89: no foco mas tangencial ao fato central.
+- <80 = reject.
+
+reject=true se: relevance<80, falhou leitura, opinião sem fato, repost, >72h, viola EXCLUSÕES do intent.
+
+topicKeywords: específicos do FATO (nome evento, pessoa, produto) pro próximo estágio.
 
 FORMATO: JSON { items: [...] }.`
 }
 
-async function runTriagePhase(opts: { candidates: FeedItem[]; userId: string }): Promise<{
+async function runTriagePhase(opts: { candidates: FeedItem[]; termIntents: Record<string, string>; userId: string }): Promise<{
   items: (TriageItem & { candidate: FeedItem })[]
   usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; fetchesUsed: number }
 }> {
-  const { candidates, userId } = opts
+  const { candidates, termIntents, userId } = opts
   if (candidates.length === 0) return { items: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, fetchesUsed: 0 } }
 
-  const userPrompt = `${candidates.length} CANDIDATOS (lista FIXA do RSS; NÃO invente outros):
+  // Monta bloco de intenções por termo (só termos presentes nos candidatos)
+  const termsInCandidates = Array.from(new Set(candidates.map((c) => c.term)))
+  const intentBlock = termsInCandidates.map((t) => {
+    const intent = termIntents[t]
+    return intent ? `- "${t}" → ${intent}` : `- "${t}" → (sem intenção declarada — use julgamento padrão de relevância)`
+  }).join("\n")
+
+  const userPrompt = `INTENÇÕES POR TERMO (foco/exclusões declarados pelo usuário):
+${intentBlock}
+
+${candidates.length} CANDIDATOS (lista FIXA do RSS; NÃO invente outros):
 
 ${candidates.map((c, i) => `[${i}] term="${c.term}" (${c.locale}) · ${c.source} · pub ${c.pubDate?.toISOString() ?? "?"}
     Título: ${c.title}
     URL: ${c.url}
     Snippet RSS: ${c.description.slice(0, 200)}`).join("\n")}
 
-Execute web_fetch em cada URL, extraia os dados e retorne o JSON. Rejeite liberalmente.`
+Execute web_fetch em cada URL, extraia os dados e classifique contra a INTENÇÃO do termo. Rejeite liberalmente (reject=true) se viola exclusões ou cai fora do foco declarado.`
 
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: userPrompt }]
   const totals = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 }
@@ -239,7 +260,7 @@ Execute web_fetch em cada URL, extraia os dados e retorne o JSON. Rejeite libera
   }
 
   const items = parsed.items
-    .filter((it) => !it.reject && it.relevanceScore >= 70 && it.candidateIndex >= 0 && it.candidateIndex < candidates.length)
+    .filter((it) => !it.reject && it.relevanceScore >= 80 && it.candidateIndex >= 0 && it.candidateIndex < candidates.length)
     .map((it) => ({ ...it, candidate: candidates[it.candidateIndex] }))
 
   trackUsage(IDEAS_MODEL, "triage_phase", totals.input, totals.output, durationMs, userId, {
@@ -283,23 +304,27 @@ FORMATO: JSON { sources: [...] }.`
 
 async function runDeepResearchPhase(opts: {
   qualified: (TriageItem & { candidate: FeedItem })[]
+  termIntents: Record<string, string>
   userId: string
 }): Promise<{
   sources: (z.infer<typeof SupportingSourceSchema> & { primary: TriageItem & { candidate: FeedItem } })[]
   usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; searchesUsed: number; fetchesUsed: number }
 }> {
-  const { qualified, userId } = opts
+  const { qualified, termIntents, userId } = opts
   if (qualified.length === 0) return { sources: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, searchesUsed: 0, fetchesUsed: 0 } }
 
-  const userPrompt = `${qualified.length} MATÉRIAS QUALIFICADAS — busque fontes de apoio:
+  const userPrompt = `${qualified.length} MATÉRIAS QUALIFICADAS — busque fontes de apoio que confirmem o MESMO FATO:
 
-${qualified.map((q, i) => `[${i}] term="${q.candidate.term}" · rel=${q.relevanceScore} · pioneer=${q.pioneerPotential}
+${qualified.map((q, i) => {
+  const intent = termIntents[q.candidate.term]
+  return `[${i}] term="${q.candidate.term}" · rel=${q.relevanceScore} · pioneer=${q.pioneerPotential}${intent ? `\n    Intenção do usuário: ${intent}` : ""}
     Título: ${q.title}
     URL: ${q.canonicalUrl}
     Resumo: ${q.summary}
-    Keywords: ${q.topicKeywords.join(", ")}`).join("\n\n")}
+    Keywords: ${q.topicKeywords.join(", ")}`
+}).join("\n\n")}
 
-Use web_search com as keywords de cada primário, web_fetch em 1-2 resultados, retorne APENAS fontes que corroboram (agreement ≥ 70).`
+Use web_search com as keywords específicas do fato (não o term genérico), web_fetch em 1-2 resultados, retorne APENAS fontes que CONFIRMAM o mesmo fato (agreement ≥ 70) E não violam a intenção do usuário.`
 
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: userPrompt }]
   const totals = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 }
@@ -477,6 +502,7 @@ export interface ResearchedIdea {
 
 interface GenerateIdeasOptions {
   terms: string[]
+  termIntents?: Record<string, string> // term → intent (foco/exclusões)
   ideasPerTerm?: number
   language?: "pt-BR" | "en" | "both"
   hoursWindow?: number
@@ -498,7 +524,7 @@ export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Pro
     supportingFound: number
   }
 }> {
-  const { terms, hoursWindow = 72, userId } = opts
+  const { terms, termIntents = {}, hoursWindow = 72, userId } = opts
   if (!userId) throw new Error("userId obrigatório")
   const empty = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, searchesUsed: 0, fetchesUsed: 0, evidencesCaptured: 0, candidatesFromRss: 0, qualifiedAfterTriage: 0, supportingFound: 0 }
   if (terms.length === 0) return { ideas: [], usage: empty }
@@ -508,8 +534,8 @@ export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Pro
   console.log(`[pipeline] stage1: ${candidates.length} candidatos RSS`)
   if (candidates.length === 0) return { ideas: [], usage: empty }
 
-  // Stage 2 — triagem
-  const triage = await runTriagePhase({ candidates, userId })
+  // Stage 2 — triagem (usa intent pra descartar matérias fora do foco)
+  const triage = await runTriagePhase({ candidates, termIntents, userId })
   console.log(`[pipeline] stage2: ${triage.items.length} qualificados de ${candidates.length}`)
   if (triage.items.length === 0) {
     return {
@@ -518,8 +544,8 @@ export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Pro
     }
   }
 
-  // Stage 3 — aprofundamento
-  const deep = await runDeepResearchPhase({ qualified: triage.items, userId })
+  // Stage 3 — aprofundamento (intent passado pra não divergir no deep research)
+  const deep = await runDeepResearchPhase({ qualified: triage.items, termIntents, userId })
   console.log(`[pipeline] stage3: ${deep.sources.length} fontes de apoio`)
 
   // Persiste primários

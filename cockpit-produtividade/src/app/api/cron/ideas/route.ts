@@ -12,22 +12,24 @@ export async function GET(req: NextRequest) {
 
   const usersWithTerms = await db.monitorTerm.findMany({
     where: { isActive: true },
-    select: { userId: true, term: true },
+    select: { userId: true, term: true, intent: true },
   })
 
-  const byUser: Record<string, string[]> = {}
-  for (const { userId, term } of usersWithTerms) {
-    if (!byUser[userId]) byUser[userId] = []
-    byUser[userId].push(term)
+  const byUser: Record<string, { terms: string[]; intents: Record<string, string> }> = {}
+  for (const { userId, term, intent } of usersWithTerms) {
+    if (!byUser[userId]) byUser[userId] = { terms: [], intents: {} }
+    byUser[userId].terms.push(term)
+    if (intent && intent.trim()) byUser[userId].intents[term] = intent.trim()
   }
 
   let totalCreated = 0
   const perUserStats: Array<{ userId: string; terms: number; ideas: number; error?: string }> = []
 
-  for (const [userId, terms] of Object.entries(byUser)) {
+  for (const [userId, { terms, intents }] of Object.entries(byUser)) {
     try {
       const { ideas, usage } = await generateIdeasWithResearch({
         terms,
+        termIntents: intents,
         ideasPerTerm: 2,
         hoursWindow: 72,
         language: "both",
