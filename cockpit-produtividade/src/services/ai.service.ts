@@ -144,6 +144,151 @@ const BLOCKED_DOMAINS = [
   "yahoo.com",
 ]
 
+// Domínios que são redirecionadores/agregadores, NÃO publishers reais.
+// URLs com esses domínios NUNCA devem chegar ao usuário como "fonte".
+const REDIRECT_DOMAINS = [
+  "news.google.com",
+  "google.com/url",
+  "bing.com/news",
+  "duckduckgo.com",
+  "t.co",
+  "bit.ly",
+  "lnkd.in",
+]
+
+function isRealPublisherUrl(url: string): boolean {
+  if (!url || typeof url !== "string") return false
+  try {
+    const u = new URL(url)
+    const host = u.hostname.toLowerCase()
+    const fullPath = host + u.pathname.toLowerCase()
+    return !REDIRECT_DOMAINS.some((d) => fullPath.startsWith(d) || host === d || host.endsWith("." + d))
+  } catch {
+    return false
+  }
+}
+
+// ─── Stage 1-alt: discovery via Claude web_search (URLs reais) ─────────
+
+const DiscoveryItemSchema = z.object({
+  term: z.string().describe("Termo monitorado — EXATAMENTE um dos listados"),
+  url: z.string().describe("URL REAL do publisher (folha.uol.com.br, techcrunch.com, etc). NUNCA news.google.com, google.com/url, bing.com/news."),
+  title: z.string().describe("Título da matéria"),
+  snippet: z.string().describe("Snippet do resultado de busca"),
+  publisher: z.string().describe("Nome do publisher (ex: 'Folha de S.Paulo', 'TechCrunch')"),
+  publishedAt: z.string().optional().describe("Data de publicação se disponível no snippet"),
+  locale: z.enum(["pt-BR", "en-US", "other"]),
+})
+
+const DiscoveryResponseSchema = z.object({
+  candidates: z.array(DiscoveryItemSchema),
+})
+
+function buildDiscoverySystemPrompt(): string {
+  return `Você é BUSCADOR DE NOTÍCIAS. Pra cada termo monitorado, execute web_search e colete URLs REAIS de publishers.
+
+REGRAS INEGOCIÁVEIS
+- Use APENAS web_search. NÃO use web_fetch nesta etapa (a leitura vem depois).
+- Retorne SOMENTE URLs de publishers REAIS: folha.uol.com.br, techcrunch.com, valor.globo.com, nytimes.com, etc.
+- NUNCA inclua URL contendo: news.google.com, google.com/url, bing.com/news, duckduckgo.com, bit.ly, t.co, lnkd.in.
+- Se o resultado do web_search for um redirect/agregador, DESCARTE (não inclua).
+- Prefira tier-1 (veículos estabelecidos) mas pode pegar tier-2 se for especializado no nicho.
+- ~5-8 candidatos por termo (ou menos se houver poucos resultados tier-1+2).
+- Prefira matérias das últimas 72h quando possível de identificar pelo snippet.
+- Use queries efetivas em PT e EN (ex: "<termo> notícia últimas 24h" e "<termo> news latest").
+
+NÃO filtre por relevância aqui — coleta. A triagem cruza com a intenção depois.
+
+FORMATO: JSON { candidates: [...] }.`
+}
+
+async function runDiscoveryPhase(opts: {
+  terms: string[]
+  termIntents: Record<string, string>
+  userId: string
+}): Promise<{
+  candidates: { term: string; url: string; title: string; snippet: string; publisher: string; publishedAt?: string; locale: "pt-BR" | "en-US" | "other" }[]
+  usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; searchesUsed: number }
+}> {
+  const { terms, termIntents, userId } = opts
+  if (terms.length === 0) return { candidates: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, searchesUsed: 0 } }
+
+  const intentHint = Object.entries(termIntents).length > 0
+    ? "\nIntenção do usuário por termo (use para decidir queries de busca melhores):\n" +
+      Object.entries(termIntents).map(([t, i]) => `- "${t}": ${i}`).join("\n")
+    : ""
+
+  const userPrompt = `TERMOS MONITORADOS:
+${terms.map((t) => `- "${t}"`).join("\n")}${intentHint}
+
+Execute web_search pra cada termo (1-2 queries por termo, em PT e EN quando fizer sentido).
+Colete ~${Math.max(5, terms.length * 4)} candidatos no total, SÓ de publishers reais.`
+
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: userPrompt }]
+  const totals = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 }
+  let searchesUsed = 0
+  let finalText: string | null = null
+  const start = Date.now()
+
+  for (let i = 0; i < 4; i++) {
+    const response = await anthropic.messages.create({
+      model: IDEAS_MODEL,
+      max_tokens: 8000,
+      system: [{ type: "text", text: buildDiscoverySystemPrompt(), cache_control: { type: "ephemeral" } }],
+      thinking: { type: "adaptive" },
+      output_config: { format: zodOutputFormat(DiscoveryResponseSchema), effort: "low" },
+      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: Math.max(4, terms.length * 2), blocked_domains: [...BLOCKED_DOMAINS, ...REDIRECT_DOMAINS] }],
+      messages,
+    })
+    totals.input += response.usage.input_tokens
+    totals.output += response.usage.output_tokens
+    totals.cacheRead += response.usage.cache_read_input_tokens ?? 0
+    totals.cacheCreation += response.usage.cache_creation_input_tokens ?? 0
+    for (const b of response.content) {
+      if (b.type === "server_tool_use" && b.name === "web_search") searchesUsed++
+    }
+    if (response.stop_reason === "pause_turn") {
+      messages.push({ role: "assistant", content: response.content })
+      continue
+    }
+    const tb = [...response.content].reverse().find((b): b is Anthropic.TextBlock => b.type === "text")
+    if (!tb) throw new Error(`discovery: sem text (stop=${response.stop_reason})`)
+    finalText = tb.text
+    break
+  }
+  const durationMs = Date.now() - start
+  if (!finalText) throw new Error("discovery: pause_turn loop exceeded")
+
+  let parsed: z.infer<typeof DiscoveryResponseSchema>
+  try { parsed = DiscoveryResponseSchema.parse(JSON.parse(finalText)) }
+  catch (err) {
+    console.error("[discovery] parse:", err, "raw:", finalText.slice(0, 300))
+    throw new Error("Falha ao parsear discovery")
+  }
+
+  // Validation: drop URLs que ainda são agregadores, ou que não são URLs válidas, ou que não casam com termo
+  const validTerms = new Set(terms)
+  const seen = new Set<string>()
+  const candidates = parsed.candidates
+    .filter((c) => c.url && c.title && validTerms.has(c.term))
+    .filter((c) => isRealPublisherUrl(c.url))
+    .filter((c) => {
+      if (seen.has(c.url)) return false
+      seen.add(c.url)
+      return true
+    })
+
+  trackUsage(IDEAS_MODEL, "discovery_phase", totals.input, totals.output, durationMs, userId, {
+    cacheReadTokens: totals.cacheRead, cacheCreationTokens: totals.cacheCreation,
+    searchesUsed, candidatesFound: candidates.length, candidatesRejected: parsed.candidates.length - candidates.length,
+  }).catch(() => {})
+
+  return {
+    candidates,
+    usage: { inputTokens: totals.input, outputTokens: totals.output, cacheReadTokens: totals.cacheRead, cacheCreationTokens: totals.cacheCreation, searchesUsed },
+  }
+}
+
 // ─── Stage 2: triagem ──────────────────────────────────────────────────
 
 const TriageItemSchema = z.object({
@@ -261,6 +406,14 @@ Execute web_fetch em cada URL, extraia os dados e classifique contra a INTENÇÃ
 
   const items = parsed.items
     .filter((it) => !it.reject && it.relevanceScore >= 80 && it.candidateIndex >= 0 && it.candidateIndex < candidates.length)
+    // Rejeita qualquer canonicalUrl que seja redirect/agregador — só publisher real passa
+    .filter((it) => {
+      if (!isRealPublisherUrl(it.canonicalUrl)) {
+        console.warn(`[triage] drop item: canonicalUrl "${it.canonicalUrl}" não é publisher real`)
+        return false
+      }
+      return true
+    })
     .map((it) => ({ ...it, candidate: candidates[it.candidateIndex] }))
 
   trackUsage(IDEAS_MODEL, "triage_phase", totals.input, totals.output, durationMs, userId, {
@@ -373,6 +526,14 @@ Use web_search com as keywords específicas do fato (não o term genérico), web
 
   const sources = parsed.sources
     .filter((s) => !s.reject && s.agreementScore >= 70 && s.primaryIndex >= 0 && s.primaryIndex < qualified.length)
+    // Rejeita supporting sources que sejam redirect/agregador
+    .filter((s) => {
+      if (!isRealPublisherUrl(s.url)) {
+        console.warn(`[deep] drop supporting: url "${s.url}" não é publisher real`)
+        return false
+      }
+      return true
+    })
     .map((s) => ({ ...s, primary: qualified[s.primaryIndex] }))
 
   trackUsage(IDEAS_MODEL, "deep_research_phase", totals.input, totals.output, durationMs, userId, {
@@ -529,10 +690,21 @@ export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Pro
   const empty = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, searchesUsed: 0, fetchesUsed: 0, evidencesCaptured: 0, candidatesFromRss: 0, qualifiedAfterTriage: 0, supportingFound: 0 }
   if (terms.length === 0) return { ideas: [], usage: empty }
 
-  // Stage 1 — discovery
-  const candidates = await discoverCandidates({ terms, hoursWindow, perTerm: 5, perTermEn: 3 })
-  console.log(`[pipeline] stage1: ${candidates.length} candidatos RSS`)
-  if (candidates.length === 0) return { ideas: [], usage: empty }
+  // Stage 1 — discovery via Claude web_search (URLs reais de publishers)
+  const discovery = await runDiscoveryPhase({ terms, termIntents, userId })
+  console.log(`[pipeline] stage1: ${discovery.candidates.length} candidatos (via web_search)`)
+  if (discovery.candidates.length === 0) return { ideas: [], usage: empty }
+
+  // Adapta discovery → formato FeedItem pra reutilizar triage
+  const candidates: FeedItem[] = discovery.candidates.map((c) => ({
+    term: c.term,
+    title: c.title,
+    url: c.url,
+    pubDate: c.publishedAt ? new Date(c.publishedAt) : null,
+    source: c.publisher,
+    description: c.snippet,
+    locale: c.locale === "en-US" ? "en-US" : "pt-BR",
+  }))
 
   // Stage 2 — triagem (usa intent pra descartar matérias fora do foco)
   const triage = await runTriagePhase({ candidates, termIntents, userId })
