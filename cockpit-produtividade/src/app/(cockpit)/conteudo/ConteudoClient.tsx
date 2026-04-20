@@ -837,9 +837,19 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                                 ✓ matéria real
                               </span>
                             )}
-                            {idea.supportingEvidenceIds?.length > 0 && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-600 font-semibold" title={`${idea.supportingEvidenceIds.length} fonte(s) adicional(is) confirmam o mesmo fato`}>
-                                🔗 {idea.supportingEvidenceIds.length + 1} fontes
+                            {idea.publisherHosts?.length > 1 && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-600 font-semibold" title={idea.publisherHosts.join(", ")}>
+                                🔗 {idea.publisherHosts.length} publishers
+                              </span>
+                            )}
+                            {idea.hasInternationalCoverage && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-600 font-semibold" title="Cobertura internacional (EN) detectada">
+                                🌍 global
+                              </span>
+                            )}
+                            {typeof idea.viralScore === "number" && idea.viralScore >= 70 && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 font-semibold" title={`Viral score ${idea.viralScore}/100`}>
+                                🔥 viral {idea.viralScore}
                               </span>
                             )}
                             {idea.sourceUrl ? (

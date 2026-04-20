@@ -442,17 +442,37 @@ const SupportingSourceSchema = z.object({
 const DeepResearchResponseSchema = z.object({ sources: z.array(SupportingSourceSchema) })
 
 function buildDeepResearchSystemPrompt(): string {
-  return `Você é PESQUISADOR DE TRIANGULAÇÃO. Recebe matérias validadas e busca 1-2 fontes adicionais que CONFIRMEM o mesmo fato.
+  return `Você é PESQUISADOR DE TRIANGULAÇÃO E VIRALIDADE. Pra cada matéria primária, você busca cobertura ADICIONAL pra avaliar: a) é só uma notícia solitária de 1 publisher ou b) é um fato que se espalhou (potencial viral).
 
-REGRAS
-- Use web_search com as topicKeywords do primário (não o term genérico).
-- web_fetch nas 1-2 mais promissoras.
-- agreementScore: quão fortemente CORROBORA o mesmo fato. Não é similaridade — é confirmação factual.
-- Priorize fontes DIFERENTES do veículo primário.
-- Rejeite: repost, agregador, contradição especulativa, tangencial.
-- Se não achar fonte, retorne sources=[] pra aquele primário. Isso é OK (notícia solitária).
+ESTRATÉGIA DE BUSCA (OBRIGATÓRIA — execute as 2 buscas por primário)
+1. CROSS-PUBLISHER (PT): web_search com topicKeywords em PORTUGUÊS.
+   Objetivo: achar OUTROS veículos BR cobrindo o MESMO fato (Folha, G1, Valor, Estadão, CNN Brasil, TechTudo, Olhar Digital, NeoFeed, etc.).
+   Descartar resultados do MESMO publisher primário (triangulação independente).
 
-FORMATO: JSON { sources: [...] }.`
+2. CROSS-LANGUAGE (EN): web_search com topicKeywords EM INGLÊS.
+   Objetivo: verificar se o fato virou matéria internacional (TechCrunch, Reuters, Bloomberg, NYT, The Verge, FT, etc.).
+   Cobertura internacional = forte sinal de viralidade.
+
+Pra cada resultado promissor, use web_fetch pra ler o conteúdo antes de incluir.
+
+REGRAS PARA INCLUIR UMA FONTE
+- agreementScore ≥ 70: a fonte CORROBORA o fato do primário (não só toca no tema).
+- publisher DIFERENTE do primário (domain host distinto).
+- URL REAL de publisher (nunca news.google.com, google.com/url, etc).
+- Fato central alinhado com o primário.
+
+REJEITE LIBERALMENTE
+- Repost / agregador sem substância
+- Matéria sobre tema adjacente que não corrobora o fato específico
+- Redirect / URL google news / bing news
+- Opinião pessoal sem apuração
+
+FILOSOFIA
+Se a primária aparece em 3 publishers BR + 2 publishers EN → é viral real.
+Se aparece só no primário → é notícia solitária (OK incluir como ideia mas com score viral baixo).
+Se você não conseguir web_fetch fontes adicionais, retorne sources=[] pra aquele primário. Não invente.
+
+FORMATO: JSON { sources: [...] } — cada source aponta pro primaryIndex. Mire em 2-4 sources por primário quando o fato for real.`
 }
 
 async function runDeepResearchPhase(opts: {
@@ -466,18 +486,26 @@ async function runDeepResearchPhase(opts: {
   const { qualified, termIntents, userId } = opts
   if (qualified.length === 0) return { sources: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, searchesUsed: 0, fetchesUsed: 0 } }
 
-  const userPrompt = `${qualified.length} MATÉRIAS QUALIFICADAS — busque fontes de apoio que confirmem o MESMO FATO:
+  const userPrompt = `${qualified.length} MATÉRIAS PRIMÁRIAS — triangule cada uma cross-publisher e cross-language:
 
 ${qualified.map((q, i) => {
   const intent = termIntents[q.candidate.term]
+  const primaryHost = (() => { try { return new URL(q.canonicalUrl).hostname.replace(/^www\./, "") } catch { return "" } })()
   return `[${i}] term="${q.candidate.term}" · rel=${q.relevanceScore} · pioneer=${q.pioneerPotential}${intent ? `\n    Intenção do usuário: ${intent}` : ""}
-    Título: ${q.title}
-    URL: ${q.canonicalUrl}
+    Primário: ${q.title}
+    URL primária: ${q.canonicalUrl}
+    Publisher primário: ${primaryHost} (NÃO inclua outras matérias deste mesmo host)
     Resumo: ${q.summary}
-    Keywords: ${q.topicKeywords.join(", ")}`
+    Keywords (use em web_search): ${q.topicKeywords.join(", ")}`
 }).join("\n\n")}
 
-Use web_search com as keywords específicas do fato (não o term genérico), web_fetch em 1-2 resultados, retorne APENAS fontes que CONFIRMAM o mesmo fato (agreement ≥ 70) E não violam a intenção do usuário.`
+EXECUTE PRA CADA PRIMÁRIO:
+1. web_search em PT com keywords → achar outros publishers BR
+2. web_search em EN com keywords → verificar cobertura internacional
+3. web_fetch em 2-4 resultados promissores (publishers ≠ primário)
+4. Retorne só fontes que realmente CORROBORAM o fato (agreement ≥ 70), de publishers distintos.
+
+MIRE em 2-4 sources por primário quando houver. 0-1 sources = notícia solitária (OK, honesto). NÃO invente URLs.`
 
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: userPrompt }]
   const totals = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 }
@@ -493,8 +521,8 @@ Use web_search com as keywords específicas do fato (não o term genérico), web
       thinking: { type: "adaptive" },
       output_config: { format: zodOutputFormat(DeepResearchResponseSchema), effort: "medium" },
       tools: [
-        { type: "web_search_20260209", name: "web_search", max_uses: qualified.length * 2, blocked_domains: BLOCKED_DOMAINS },
-        { type: "web_fetch_20260209", name: "web_fetch", max_uses: qualified.length * 2, max_content_tokens: 4000, blocked_domains: BLOCKED_DOMAINS },
+        { type: "web_search_20260209", name: "web_search", max_uses: Math.max(qualified.length * 2, qualified.length + 4), blocked_domains: [...BLOCKED_DOMAINS, ...REDIRECT_DOMAINS] },
+        { type: "web_fetch_20260209", name: "web_fetch", max_uses: Math.max(qualified.length * 4, qualified.length + 6), max_content_tokens: 4000, blocked_domains: [...BLOCKED_DOMAINS, ...REDIRECT_DOMAINS] },
       ],
       messages,
     })
@@ -580,6 +608,40 @@ interface NarrativeGroup {
   supporting: (z.infer<typeof SupportingSourceSchema> & { primary: TriageItem & { candidate: FeedItem } })[]
 }
 
+interface ViralMetrics {
+  publisherHosts: string[]         // hosts únicos primário+apoios
+  uniqueLanguages: string[]
+  hasInternationalCoverage: boolean
+  viralScore: number               // 0-100
+}
+
+function hostOf(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, "") } catch { return "" }
+}
+
+function computeViralMetrics(group: NarrativeGroup): ViralMetrics {
+  const primaryHost = hostOf(group.primary.canonicalUrl)
+  const hosts = new Set<string>()
+  if (primaryHost) hosts.add(primaryHost)
+  const langs = new Set<string>([group.primary.language])
+  for (const s of group.supporting) {
+    const h = hostOf(s.url)
+    if (h && h !== primaryHost) hosts.add(h)
+    langs.add(s.language)
+  }
+  const publisherHosts = Array.from(hosts)
+  const uniqueLanguages = Array.from(langs)
+  const hasInternationalCoverage = uniqueLanguages.some((l) => l !== "pt-BR")
+  const freshH = group.primary.freshnessHours ?? 48
+  const tierScore = group.primary.sourceAuthority === "TIER_1" ? 10 : group.primary.sourceAuthority === "TIER_2" ? 5 : 0
+  const freshScore = freshH < 24 ? 20 : freshH < 48 ? 10 : 0
+  const publisherBonus = Math.min(45, Math.max(0, publisherHosts.length - 1) * 15)
+  const internationalBonus = hasInternationalCoverage ? 15 : 0
+  const raw = 20 + publisherBonus + internationalBonus + freshScore + tierScore
+  const viralScore = Math.max(0, Math.min(100, raw))
+  return { publisherHosts, uniqueLanguages, hasInternationalCoverage, viralScore }
+}
+
 async function runNarrativePhase(opts: { groups: NarrativeGroup[]; userId: string }): Promise<{
   ideas: (z.infer<typeof NarrativeIdeaSchema> & { group: NarrativeGroup })[]
   usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }
@@ -587,22 +649,32 @@ async function runNarrativePhase(opts: { groups: NarrativeGroup[]; userId: strin
   const { groups, userId } = opts
   if (groups.length === 0) return { ideas: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 } }
 
+  const metrics = groups.map((g) => computeViralMetrics(g))
   const userPrompt = `${groups.length} GRUPOS:
 
-${groups.map((g, i) => `[${i}] term="${g.primary.candidate.term}" · autoridade=${g.primary.sourceAuthority} · fresh=${g.primary.freshnessHours}h · apoios=${g.supporting.length}
+${groups.map((g, i) => {
+    const m = metrics[i]
+    return `[${i}] term="${g.primary.candidate.term}" · autoridade=${g.primary.sourceAuthority} · fresh=${g.primary.freshnessHours}h · publishers=${m.publisherHosts.length} · idiomas=${m.uniqueLanguages.join(",")} · viralScore=${m.viralScore}
 
   PRIMÁRIO: ${g.primary.title}
-    URL: ${g.primary.canonicalUrl}
+    URL: ${g.primary.canonicalUrl} (${hostOf(g.primary.canonicalUrl)})
     Resumo: ${g.primary.summary}
     Quote: "${g.primary.keyQuote}"
 
   APOIOS:
-${g.supporting.length === 0 ? "    (notícia solitária)" : g.supporting.map((s) => `    - ${s.title} [${s.sourceAuthority}]
+${g.supporting.length === 0 ? "    (notícia solitária — nenhum outro publisher corroborou)" : g.supporting.map((s) => `    - [${hostOf(s.url)}/${s.language}] ${s.title} [${s.sourceAuthority}]
       "${s.keyQuote}"
       ${s.addsInfo ? `Adiciona: ${s.addsInfo}` : ""}`).join("\n")}
-`).join("\n")}
+`
+  }).join("\n")}
 
-Gere ideias. Pode pular grupos fracos. Qualidade > quantidade.`
+Gere ideias considerando o viralScore de cada grupo:
+- viralScore ≥ 70: múltiplos publishers corroboram → ideia pode falar com confiança "X reportou, Y confirmou, Z em inglês"
+- viralScore 40-69: notícia real mas cobertura limitada → tom mais especulativo
+- viralScore < 40: notícia solitária ou fraca → ideia só se o fato for intrinsecamente grande
+
+pioneerScore ≠ viralScore. Pioneiro = ÂNGULO único + timing. Podem coexistir: viralScore alto + pioneerScore alto = notícia quebrando em vários lugares mas com ângulo que ninguém pegou ainda.
+Qualidade > quantidade. Pular grupos fracos é válido.`
 
   const start = Date.now()
   const response = await anthropic.messages.create({
@@ -659,6 +731,9 @@ export interface ResearchedIdea {
   evidenceId: string
   evidenceQuote: string
   supportingEvidenceIds: string[]
+  viralScore: number
+  publisherHosts: string[]
+  hasInternationalCoverage: boolean
 }
 
 interface GenerateIdeasOptions {
@@ -774,6 +849,7 @@ export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Pro
     if (!evId) continue
     const supIds = supportingIdsByPrimary.get(i.groupIndex) ?? []
     const p = i.group.primary
+    const metrics = computeViralMetrics(i.group)
     ideas.push({
       title: i.title, summary: i.summary, angle: i.angle, hook: i.hook,
       term: p.candidate.term, relevance: i.relevance,
@@ -782,6 +858,9 @@ export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Pro
       pioneerScore: Math.max(0, Math.min(100, Math.round(i.pioneerScore))),
       evidenceId: evId, evidenceQuote: i.evidenceQuote,
       supportingEvidenceIds: supIds,
+      viralScore: metrics.viralScore,
+      publisherHosts: metrics.publisherHosts,
+      hasInternationalCoverage: metrics.hasInternationalCoverage,
     })
   }
 

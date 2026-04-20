@@ -469,6 +469,10 @@ model IdeaFeed {
   evidence             NewsEvidence? @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
   evidenceQuote        String?    // trecho verbatim da matéria primária
   supportingEvidenceIds String[] @default([]) // IDs de matérias de apoio (triangulação)
+  // Viralidade / cobertura
+  viralScore           Int?       // 0-100 de publishers × idiomas × recência
+  publisherHosts       String[] @default([]) // hosts únicos (primário + apoios)
+  hasInternationalCoverage Boolean @default(false)
   isUsed        Boolean   @default(false)
   isDiscarded   Boolean   @default(false)
   createdAt     DateTime  @default(now())
