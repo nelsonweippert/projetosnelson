@@ -283,11 +283,11 @@ Execute web_search em cada query priorizando estratégias diversas. Agregue cand
   const { text, usage } = await runWithPauseTurn({
     systemPrompt: buildDiscoverySystemPrompt(),
     userPrompt,
-    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 10 } as Anthropic.MessageCreateParams["tools"] extends (infer U)[] ? U : never] as Anthropic.MessageCreateParams["tools"],
-    effort: "medium",
-    maxTokens: 10000,
+    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 6 } as Anthropic.MessageCreateParams["tools"] extends (infer U)[] ? U : never] as Anthropic.MessageCreateParams["tools"],
+    effort: "low",
+    maxTokens: 6000,
     outputSchema: DiscoveryResponseSchema,
-    maxRounds: 8,
+    maxRounds: 5,
   })
   const durationMs = Date.now() - start
 
@@ -383,11 +383,11 @@ Execute site: pra validar cada candidato. Descarte hallucinations/mortos/off-top
   const { text, usage } = await runWithPauseTurn({
     systemPrompt: buildRankingSystemPrompt(),
     userPrompt,
-    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: Math.min(Math.max(candidates.length, 10), 20) } as Anthropic.MessageCreateParams["tools"] extends (infer U)[] ? U : never] as Anthropic.MessageCreateParams["tools"],
-    effort: "high",
-    maxTokens: 14000,
+    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: Math.min(Math.max(candidates.length, 8), 12) } as Anthropic.MessageCreateParams["tools"] extends (infer U)[] ? U : never] as Anthropic.MessageCreateParams["tools"],
+    effort: "medium",
+    maxTokens: 10000,
     outputSchema: RankingResponseSchema,
-    maxRounds: 10,
+    maxRounds: 6,
   })
   const durationMs = Date.now() - start
 

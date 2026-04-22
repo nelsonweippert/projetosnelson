@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { stageDiscovery, DecompositionSchema } from "@/services/source-discovery.service"
 
+export const runtime = "nodejs"
 export const maxDuration = 60
 
 export async function POST(req: NextRequest) {

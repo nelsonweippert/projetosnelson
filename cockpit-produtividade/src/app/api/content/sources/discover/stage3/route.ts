@@ -7,6 +7,7 @@ import { Prisma } from "@/generated/prisma/client"
 import { stageRanking, DecompositionSchema, RawCandidateSchema } from "@/services/source-discovery.service"
 import { z } from "zod"
 
+export const runtime = "nodejs"
 export const maxDuration = 90
 
 const CandidatesSchema = z.array(RawCandidateSchema)
@@ -27,7 +28,13 @@ export async function POST(req: NextRequest) {
     if (!term) return NextResponse.json({ success: false, error: "Termo não encontrado" }, { status: 404 })
 
     const decomp = DecompositionSchema.parse(body.decomposition)
-    const candidates = CandidatesSchema.parse(body.candidates)
+    const allCandidates = CandidatesSchema.parse(body.candidates)
+
+    // Limita candidatos pra caber em <60s. Se mais do que 15, prioriza os que
+    // apareceram em mais queries (foundVia maior = sinal de qualidade).
+    const candidates = allCandidates.length > 15
+      ? [...allCandidates].sort((a, b) => (b.foundVia?.length ?? 0) - (a.foundVia?.length ?? 0)).slice(0, 15)
+      : allCandidates
 
     const ranking = await stageRanking({ term: term.term, intent: term.intent, candidates, decomposition: decomp, userId })
 
