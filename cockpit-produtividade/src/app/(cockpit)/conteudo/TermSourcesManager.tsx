@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react"
 import { Loader2, Search, X, Plus, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { discoverSourcesForTermAction, updateTermSourcesAction } from "@/app/actions/idea.actions"
+import { updateTermSourcesAction } from "@/app/actions/idea.actions"
 
 export type TermSourceScores = {
   authority: number
@@ -66,20 +66,26 @@ export function TermSourcesManager({ termId, sources, onSourcesChange }: Props) 
     setError(null)
     setLastResult(null)
     try {
-      const res = await discoverSourcesForTermAction(termId)
-      if (res.success) {
-        const updated = res.data as { sources: TermSource[]; _discovery?: { found: number; rejected: { host: string; reason: string }[]; usage: { totalDurationMs: number } } }
-        const newSources = (Array.isArray(updated?.sources) ? updated.sources : []) as TermSource[]
-        onSourcesChange(newSources)
-        if (updated._discovery) {
-          setLastResult({
-            found: updated._discovery.found,
-            rejected: updated._discovery.rejected.length,
-            durationMs: updated._discovery.usage.totalDurationMs,
-          })
-        }
-      } else {
-        setError(res.error || "Erro ao descobrir fontes")
+      // API route com maxDuration=300. Server actions tem timeout curto.
+      const res = await fetch("/api/content/sources/discover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ termId }),
+      })
+      let data: { success: boolean; error?: string; data?: { sources: TermSource[]; _discovery?: { found: number; rejected: { host: string; reason: string }[]; usage: { totalDurationMs: number } } } }
+      try { data = await res.json() } catch { throw new Error(`HTTP ${res.status} — resposta inválida`) }
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
+      const updated = data.data!
+      const newSources = Array.isArray(updated.sources) ? updated.sources : []
+      onSourcesChange(newSources)
+      if (updated._discovery) {
+        setLastResult({
+          found: updated._discovery.found,
+          rejected: updated._discovery.rejected.length,
+          durationMs: updated._discovery.usage.totalDurationMs,
+        })
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado")
