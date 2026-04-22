@@ -16,6 +16,7 @@ import { CONTENT_SKILLS, SKILL_LIST, ALL_SKILLS, type SkillId } from "@/config/c
 import type { Area, ContentPhase, Platform, ContentFormat } from "@/types"
 import { DatePicker } from "@/components/ui/DatePicker"
 import { ContentDetailPanel } from "./ContentDetailPanel"
+import { IdeaCard } from "./IdeaCard"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Content = any
@@ -92,10 +93,10 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   const [customIdeaLoading, setCustomIdeaLoading] = useState(false)
   const [customIdeaTerm, setCustomIdeaTerm] = useState<string>("")
   const [ideaError, setIdeaError] = useState<string | null>(null)
-  const [ideaMode, setIdeaMode] = useState<"engine" | "manual">("engine")
   const [manualTitle, setManualTitle] = useState("")
   const [manualStory, setManualStory] = useState("")
   const [manualLoading, setManualLoading] = useState(false)
+  const [manageTermsOpen, setManageTermsOpen] = useState(false)
 
   useEffect(() => {
     if (tab === "ideas" && !ideasLoaded) {
@@ -113,6 +114,14 @@ export function ConteudoClient({ initialContents, areas }: Props) {
       })
     }
   }, [tab, ideasLoaded])
+
+  // Auto-seleciona primeiro termo monitorado quando filtro está vazio (sem setState durante render)
+  useEffect(() => {
+    if (tab !== "ideas") return
+    if (ideaTermFilter) return
+    const active = monitorTerms.filter((t: any) => t.isActive).map((t: any) => t.term)
+    if (active.length > 0) setIdeaTermFilter(active[0])
+  }, [tab, ideaTermFilter, monitorTerms])
 
   async function handleAddTerm() {
     if (!newTerm.trim()) return
@@ -692,142 +701,145 @@ export function ConteudoClient({ initialContents, areas }: Props) {
         {/* ═══ TAB: REPOSITÓRIO DE IDEIAS ═══ */}
         {tab === "ideas" && (
           <div className="space-y-5">
-            {/* Mode selector: engine vs manual */}
-            <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1 w-fit">
-              <button onClick={() => setIdeaMode("engine")}
-                className={cn("px-4 py-2 rounded-lg text-xs font-semibold transition-colors",
-                  ideaMode === "engine" ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
-                🤖 Motor de ideias
-              </button>
-              <button onClick={() => setIdeaMode("manual")}
-                className={cn("px-4 py-2 rounded-lg text-xs font-semibold transition-colors",
-                  ideaMode === "manual" ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
-                ✍️ Minha própria ideia
-              </button>
-            </div>
+            {/* ═══ 3 MODOS DE IDEAÇÃO LADO A LADO ═══ */}
+            {ideaError && (
+              <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400">{ideaError}</div>
+            )}
 
-            {ideaMode === "manual" && (
-              <div className="cockpit-card">
-                <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider mb-1">✍️ Escreva sua ideia</h3>
-                <p className="text-[10px] text-cockpit-muted mb-3">Sem IA, sem variações — o texto vira a base do seu conteúdo e o fluxo (elaboração, briefing, roteiro) se ajusta em cima dele.</p>
-                {ideaError && (
-                  <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 mb-3">{ideaError}</div>
-                )}
-                <div className="space-y-2">
-                  <input type="text" value={manualTitle} onChange={(e) => setManualTitle(e.target.value)}
-                    placeholder="Título do conteúdo"
-                    className="w-full px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
-                  <textarea value={manualStory} onChange={(e) => setManualStory(e.target.value)} rows={6}
-                    placeholder="História ou tema — escreva livremente o que você quer criar. Isso será usado como base pra elaboração e roteiro."
-                    className="w-full px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30 resize-none" />
-                  <div className="flex justify-end">
-                    <button onClick={handleManualIdea} disabled={!manualTitle.trim() || !manualStory.trim() || manualLoading}
-                      className="flex items-center gap-1.5 px-4 py-2.5 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover disabled:opacity-50">
-                      {manualLoading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Usar essa ideia
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* 🤖 Motor automático */}
+              <div className="cockpit-card flex flex-col justify-between min-h-[200px]">
+                <div>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <h3 className="text-sm font-semibold text-cockpit-text flex items-center gap-1.5">🤖 Monitor automático</h3>
+                      <p className="text-[10px] text-cockpit-muted mt-0.5">Pesquisa todos os termos monitorados e gera ideias ancoradas em matérias recentes.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-3">
+                    <span className="text-xs text-cockpit-muted">
+                      <span className="text-base font-bold text-cockpit-text">{monitorTerms.filter((t: any) => t.isActive).length}</span> termo{monitorTerms.filter((t: any) => t.isActive).length === 1 ? "" : "s"} ativo{monitorTerms.filter((t: any) => t.isActive).length === 1 ? "" : "s"}
+                    </span>
+                    <button onClick={() => setManageTermsOpen((v) => !v)}
+                      className="text-[11px] text-cockpit-muted hover:text-accent underline decoration-dotted underline-offset-2">
+                      {manageTermsOpen ? "fechar" : "gerenciar"}
                     </button>
                   </div>
                 </div>
+                <button onClick={handleGenerateIdeas} disabled={generatingIdeas || monitorTerms.filter((t: any) => t.isActive).length === 0}
+                  className="mt-3 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover disabled:opacity-50 transition-colors">
+                  {generatingIdeas ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                  {generatingIdeas ? "Pesquisando (~90s)..." : "Gerar ideias agora"}
+                </button>
               </div>
-            )}
 
-            {ideaMode === "engine" && (<>
-            {/* Monitor terms */}
-            <div className="cockpit-card">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider">Termos monitorados</h3>
-                <div className="flex items-center gap-2">
-                  <a href="/conteudo/radar" className="text-[11px] text-cockpit-muted hover:text-accent hover:underline">
-                    📡 Ver radar
-                  </a>
-                  <button onClick={handleGenerateIdeas} disabled={generatingIdeas || monitorTerms.filter((t) => t.isActive).length === 0}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-accent/10 text-accent text-xs font-semibold border border-accent/20 rounded-xl hover:bg-accent/20 disabled:opacity-50">
-                    {generatingIdeas ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} {generatingIdeas ? "Pesquisando..." : "Gerar ideias agora"}
-                  </button>
+              {/* 🔍 Tema específico */}
+              <div className="cockpit-card flex flex-col justify-between min-h-[200px]">
+                <div>
+                  <h3 className="text-sm font-semibold text-cockpit-text flex items-center gap-1.5">🔍 Tema específico</h3>
+                  <p className="text-[10px] text-cockpit-muted mt-0.5 mb-3">Pesquisa focada em 1 palavra-chave. Não adiciona aos monitorados.</p>
+                  <input type="text" value={customIdeaInput} onChange={(e) => setCustomIdeaInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && customIdeaInput.trim() && !customIdeaLoading) handleThemeIdea() }}
+                    placeholder="Ex: NVIDIA GB200, Anthropic Opus 4.7"
+                    className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
                 </div>
-              </div>
-              {ideaError && (
-                <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 mb-3">{ideaError}</div>
-              )}
-              <div className="space-y-2 mb-3">
-                {monitorTerms.map((t: any) => (
-                  <div key={t.id} className="border border-cockpit-border rounded-xl p-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className={cn("flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold", t.isActive ? "bg-accent/10 text-accent" : "bg-cockpit-border-light text-cockpit-muted line-through")}>
-                        {t.term}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => startEditIntent(t.id, t.intent)} className="p-1 text-cockpit-muted hover:text-accent rounded" title="Editar foco/exclusões">
-                          <Edit2 size={12} />
-                        </button>
-                        <button onClick={() => handleDeleteTerm(t.id)} className="p-1 text-cockpit-muted hover:text-red-400 rounded">
-                          <X size={12} />
-                        </button>
-                      </div>
-                    </div>
-                    {editingIntentId === t.id ? (
-                      <div className="mt-2 space-y-1.5">
-                        <textarea value={editingIntentText} onChange={(e) => setEditingIntentText(e.target.value)} rows={3}
-                          placeholder='Ex: foco em Anthropic, OpenAI, APIs de LLM. EXCLUIR: IA em animais, arte, ciências naturais'
-                          className="w-full px-2 py-1.5 bg-cockpit-bg border border-accent/40 rounded-lg text-xs text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
-                        <div className="flex gap-1.5">
-                          <button onClick={saveIntent} className="px-2.5 py-1 bg-accent text-black text-[11px] font-semibold rounded-lg hover:bg-accent-hover">Salvar</button>
-                          <button onClick={() => setEditingIntentId(null)} className="px-2.5 py-1 text-[11px] text-cockpit-muted border border-cockpit-border rounded-lg hover:text-cockpit-text">Cancelar</button>
-                        </div>
-                      </div>
-                    ) : t.intent ? (
-                      <p className="text-[11px] text-cockpit-muted mt-1.5 leading-snug">🎯 {t.intent}</p>
-                    ) : (
-                      <button onClick={() => startEditIntent(t.id, null)} className="text-[11px] text-cockpit-muted hover:text-accent mt-1 italic">
-                        + adicionar foco (recomendado pra evitar matérias fora do tema)
-                      </button>
-                    )}
-                  </div>
-                ))}
-                {monitorTerms.length === 0 && <p className="text-xs text-cockpit-muted">Nenhum termo. Adicione temas para monitorar.</p>}
-              </div>
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <input type="text" value={newTerm} onChange={(e) => setNewTerm(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) handleAddTerm() }}
-                    placeholder="Ex: inteligência artificial, crypto, produtividade..."
-                    className="flex-1 px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
-                  <button onClick={handleAddTerm} disabled={!newTerm.trim()}
-                    className="px-3 py-2 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover disabled:opacity-50">
-                    <Plus size={14} />
-                  </button>
-                </div>
-                <textarea value={newTermIntent} onChange={(e) => setNewTermIntent(e.target.value)} rows={2}
-                  placeholder='Foco/exclusões (opcional mas recomendado). Ex: "foco em Anthropic, OpenAI, APIs. EXCLUIR: IA em animais, arte"'
-                  className="w-full px-3 py-1.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-xs text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
-              </div>
-              <p className="text-[10px] text-cockpit-muted mt-2">O sistema busca tendências diariamente às 8h. O foco ajuda a triagem descartar matérias fora do seu tema.</p>
-            </div>
-
-            {/* Pesquisar tema focado — pipeline completo de pesquisa pra 1 tema */}
-            <div className="cockpit-card">
-              <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider mb-1">🔍 Pesquisar tema específico</h3>
-              <p className="text-[10px] text-cockpit-muted mb-3">Escreva um tema ou palavra-chave e o sistema faz uma pesquisa focada (RSS + Claude + triangulação) gerando 1 ideia ancorada em fontes reais. Não adiciona aos termos monitorados.</p>
-
-              <div className="flex items-start gap-2">
-                <input type="text" value={customIdeaInput} onChange={(e) => setCustomIdeaInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && customIdeaInput.trim() && !customIdeaLoading) handleThemeIdea() }}
-                  placeholder="Ex: 'NVIDIA GB200', 'Anthropic Opus 4.7', 'corrida eleitoral EUA 2026'..."
-                  className="flex-1 px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
                 <button onClick={handleThemeIdea} disabled={!customIdeaInput.trim() || customIdeaLoading}
-                  className="flex items-center gap-1.5 px-4 py-2.5 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover disabled:opacity-50 flex-shrink-0">
-                  {customIdeaLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} {customIdeaLoading ? "Pesquisando..." : "Pesquisar e gerar"}
+                  className="mt-3 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover disabled:opacity-50 transition-colors">
+                  {customIdeaLoading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
+                  {customIdeaLoading ? "Pesquisando..." : "Pesquisar e gerar"}
+                </button>
+              </div>
+
+              {/* ✍️ Ideia própria (sem IA) */}
+              <div className="cockpit-card flex flex-col justify-between min-h-[200px]">
+                <div>
+                  <h3 className="text-sm font-semibold text-cockpit-text flex items-center gap-1.5">✍️ Ideia própria</h3>
+                  <p className="text-[10px] text-cockpit-muted mt-0.5 mb-3">Já tem a ideia. Entra direto no funil sem pesquisa automática.</p>
+                  <input type="text" value={manualTitle} onChange={(e) => setManualTitle(e.target.value)}
+                    placeholder="Título do conteúdo"
+                    className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30 mb-2" />
+                  <textarea value={manualStory} onChange={(e) => setManualStory(e.target.value)} rows={3}
+                    placeholder="Pensamento, ângulo, pontos que quer cobrir..."
+                    className="w-full px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30 resize-none" />
+                </div>
+                <button onClick={handleManualIdea} disabled={!manualTitle.trim() || !manualStory.trim() || manualLoading}
+                  className="mt-3 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover disabled:opacity-50 transition-colors">
+                  {manualLoading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                  Criar sem pesquisa
                 </button>
               </div>
             </div>
-            </>)}
+
+            {/* ═══ GERENCIAR TERMOS MONITORADOS (collapsible) ═══ */}
+            {manageTermsOpen && (
+              <div className="cockpit-card space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider">Termos monitorados</h4>
+                    <p className="text-[10px] text-cockpit-muted">O sistema pesquisa esses termos diariamente às 8h. Foco/exclusões ajudam a descartar matérias fora do tema.</p>
+                  </div>
+                  <a href="/conteudo/radar" className="text-[11px] text-cockpit-muted hover:text-accent hover:underline flex-shrink-0">📡 Ver radar</a>
+                </div>
+                <div className="space-y-2">
+                  {monitorTerms.map((t: any) => (
+                    <div key={t.id} className="border border-cockpit-border rounded-xl p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={cn("flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold", t.isActive ? "bg-accent/10 text-accent" : "bg-cockpit-border-light text-cockpit-muted line-through")}>
+                          {t.term}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => startEditIntent(t.id, t.intent)} className="p-1 text-cockpit-muted hover:text-accent rounded" title="Editar foco/exclusões">
+                            <Edit2 size={12} />
+                          </button>
+                          <button onClick={() => handleDeleteTerm(t.id)} className="p-1 text-cockpit-muted hover:text-red-400 rounded" title="Remover">
+                            <X size={12} />
+                          </button>
+                        </div>
+                      </div>
+                      {editingIntentId === t.id ? (
+                        <div className="mt-2 space-y-1.5">
+                          <textarea value={editingIntentText} onChange={(e) => setEditingIntentText(e.target.value)} rows={3}
+                            placeholder='Ex: foco em Anthropic, OpenAI, APIs de LLM. EXCLUIR: IA em animais, arte'
+                            className="w-full px-2 py-1.5 bg-cockpit-bg border border-accent/40 rounded-lg text-xs text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
+                          <div className="flex gap-1.5">
+                            <button onClick={saveIntent} className="px-2.5 py-1 bg-accent text-black text-[11px] font-semibold rounded-lg hover:bg-accent-hover">Salvar</button>
+                            <button onClick={() => setEditingIntentId(null)} className="px-2.5 py-1 text-[11px] text-cockpit-muted border border-cockpit-border rounded-lg hover:text-cockpit-text">Cancelar</button>
+                          </div>
+                        </div>
+                      ) : t.intent ? (
+                        <p className="text-[11px] text-cockpit-muted mt-1.5 leading-snug">🎯 {t.intent}</p>
+                      ) : (
+                        <button onClick={() => startEditIntent(t.id, null)} className="text-[11px] text-cockpit-muted hover:text-accent mt-1 italic">
+                          + adicionar foco (recomendado)
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {monitorTerms.length === 0 && <p className="text-xs text-cockpit-muted">Nenhum termo ainda. Adicione abaixo.</p>}
+                </div>
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center gap-2">
+                    <input type="text" value={newTerm} onChange={(e) => setNewTerm(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) handleAddTerm() }}
+                      placeholder="Ex: inteligência artificial, crypto..."
+                      className="flex-1 px-3 py-2 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
+                    <button onClick={handleAddTerm} disabled={!newTerm.trim()}
+                      className="px-3 py-2 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover disabled:opacity-50">
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                  <textarea value={newTermIntent} onChange={(e) => setNewTermIntent(e.target.value)} rows={2}
+                    placeholder='Foco/exclusões (opcional). Ex: "foco em Anthropic, OpenAI. EXCLUIR: IA em animais"'
+                    className="w-full px-3 py-1.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-xs text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
+                </div>
+              </div>
+            )}
 
             {/* Filters — only monitored terms + "Outros" */}
             {visibleIdeaFeed.length > 0 && (() => {
               const monitoredTermNames = monitorTerms.filter((t: any) => t.isActive).map((t: any) => t.term)
               const othersCount = visibleIdeaFeed.filter((i: any) => !i.isUsed && !monitoredTermNames.includes(i.term)).length
               const usedWithContent = visibleIdeaFeed.filter((i: any) => i.isUsed && contents.some((c: Content) => c.ideaFeedId === i.id || c.title === i.title)).length
-
-              if (!ideaTermFilter && monitoredTermNames.length > 0) setIdeaTermFilter(monitoredTermNames[0])
 
               return (
                 <div className="flex flex-wrap items-center gap-2">
@@ -855,13 +867,43 @@ export function ConteudoClient({ initialContents, areas }: Props) {
               )
             })()}
 
-            {visibleIdeaFeed.length === 0 ? (
+            {/* Skeletons durante pesquisa ativa */}
+            {(generatingIdeas || customIdeaLoading) && (
+              <div className="space-y-2">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="rounded-xl border border-cockpit-border bg-cockpit-surface p-4 animate-pulse">
+                    <div className="flex items-start gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-cockpit-border-light shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-cockpit-border-light rounded w-3/4" />
+                        <div className="h-3 bg-cockpit-border-light rounded w-full" />
+                        <div className="h-3 bg-cockpit-border-light rounded w-5/6" />
+                        <div className="flex gap-2 pt-1">
+                          <div className="h-5 w-16 bg-cockpit-border-light rounded-md" />
+                          <div className="h-5 w-20 bg-cockpit-border-light rounded-md" />
+                          <div className="h-5 w-14 bg-cockpit-border-light rounded-md" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-[11px] text-cockpit-muted text-center italic">
+                  Pipeline rodando: RSS → triagem → triangulação → narrativa. Pode levar ~90s.
+                </p>
+              </div>
+            )}
+
+            {visibleIdeaFeed.length === 0 && !generatingIdeas && !customIdeaLoading ? (
               <div className="cockpit-card flex flex-col items-center justify-center py-16 text-cockpit-muted">
                 <Lightbulb size={32} strokeWidth={1} />
-                <p className="text-sm mt-3">Nenhuma ideia ainda</p>
-                <p className="text-xs mt-1">Adicione termos e clique "Gerar ideias agora"</p>
+                <p className="text-sm mt-3 text-cockpit-text font-medium">Nenhuma ideia ainda</p>
+                <p className="text-xs mt-1 max-w-sm text-center">
+                  {monitorTerms.filter((t: any) => t.isActive).length === 0
+                    ? "Adicione termos monitorados ou pesquise um tema específico acima."
+                    : "Clique em 'Gerar ideias agora' pra rodar o pipeline completo."}
+                </p>
               </div>
-            ) : (
+            ) : visibleIdeaFeed.length === 0 ? null : (
               <div className="space-y-2">
                 {visibleIdeaFeed
                   .filter((i: any) => {
@@ -884,93 +926,22 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                     }
                     return i.term === ideaTermFilter
                   })
-                  .map((idea: any) => (
-                  <div key={idea.id} className={cn("cockpit-card !p-0 group transition-colors", idea.isUsed ? "opacity-60" : "hover:border-accent/30")}>
-                    <div className="px-5 py-4">
-                      <div className="flex items-start gap-3">
-                        {/* Score badge */}
-                        <div className={cn("w-11 h-11 rounded-xl flex flex-col items-center justify-center flex-shrink-0 border",
-                          idea.score >= 97 ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-500" :
-                          idea.score >= 94 ? "bg-accent/15 border-accent/30 text-accent" :
-                          "bg-amber-500/15 border-amber-500/30 text-amber-500"
-                        )}>
-                          <span className="text-sm font-bold leading-none">{idea.score || 90}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-cockpit-text">{idea.title}</p>
-                          <p className="text-xs text-cockpit-muted mt-1 line-clamp-2">{idea.summary}</p>
-                          <div className="flex flex-wrap items-center gap-2 mt-2">
-                            {idea.term && <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent">{idea.term}</span>}
-                            {idea.evidenceId && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 font-semibold" title={idea.evidenceQuote ? `"${idea.evidenceQuote}"` : "Ancorada em evidência real"}>
-                                ✓ matéria real
-                              </span>
-                            )}
-                            {idea.publisherHosts?.length > 1 && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-600 font-semibold" title={idea.publisherHosts.join(", ")}>
-                                🔗 {idea.publisherHosts.length} publishers
-                              </span>
-                            )}
-                            {idea.hasInternationalCoverage && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-600 font-semibold" title="Cobertura internacional (EN) detectada">
-                                🌍 global
-                              </span>
-                            )}
-                            {typeof idea.viralScore === "number" && idea.viralScore >= 70 && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 font-semibold" title={`Viral score ${idea.viralScore}/100`}>
-                                🔥 viral {idea.viralScore}
-                              </span>
-                            )}
-                            {idea.sourceUrl ? (
-                              <a href={idea.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-cockpit-muted hover:text-accent hover:underline">
-                                📰 {idea.source ?? (() => { try { return new URL(idea.sourceUrl).hostname.replace("www.","") } catch { return "fonte" } })()}
-                              </a>
-                            ) : (
-                              idea.source && idea.source !== "ai_research" && idea.source !== "ai_generated" && idea.source !== "cron" && <span className="text-[10px] text-cockpit-muted">📰 {idea.source}</span>
-                            )}
-                            {idea.publishedAt && (
-                              <span className="text-[10px] text-cockpit-muted">
-                                🕐 {new Date(idea.publishedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                              </span>
-                            )}
-                            {idea.angle && <span className="text-[10px] text-cockpit-muted">💡 {idea.angle}</span>}
-                          </div>
-                          {idea.evidenceQuote && (
-                            <blockquote className="text-[11px] italic text-cockpit-muted mt-1.5 pl-2 border-l-2 border-emerald-500/40">
-                              "{idea.evidenceQuote}"
-                            </blockquote>
-                          )}
-                          {idea.relevance && <p className="text-[10px] text-cockpit-muted mt-1.5 whitespace-pre-wrap">📈 {idea.relevance.split(/(https?:\/\/[^\s\)]+)/g).map((part: string, j: number) => /^https?:\/\//.test(part) ? <a key={j} href={part} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-accent/10 text-accent text-[9px] font-medium rounded hover:underline">🔗 {(() => { try { return new URL(part).hostname.replace("www.","") } catch { return part.substring(0,30) } })()}</a> : <span key={j}>{part}</span>)}</p>}
-                          {idea.hook && <p className="text-xs text-cockpit-muted mt-2 italic border-l-2 border-accent/30 pl-2">Hook: "{idea.hook}"</p>}
-                        </div>
-                        <div className="flex flex-col gap-1.5 flex-shrink-0">
-                          {idea.isUsed ? (() => {
-                            const linkedContent = contents.find((c: Content) => c.ideaFeedId === idea.id || c.title === idea.title)
-                            return linkedContent ? (
-                              <button onClick={() => setSelectedContent(linkedContent)}
-                                className="px-3 py-1.5 text-[11px] font-medium text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-colors">
-                                ✓ Ver conteúdo
-                              </button>
-                            ) : (
-                              <span className="px-3 py-1.5 text-[11px] font-medium text-cockpit-muted bg-cockpit-border-light rounded-lg">Sem conteúdo</span>
-                            )
-                          })() : (
-                            <>
-                              <button onClick={() => handleUseIdea(idea)} disabled={isPending}
-                                className="flex items-center gap-1 px-3 py-1.5 bg-accent text-black text-[11px] font-semibold rounded-lg hover:bg-accent-hover disabled:opacity-50">
-                                <Plus size={12} /> Utilizar
-                              </button>
-                              <button onClick={() => handleDiscardIdea(idea.id)}
-                                className="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-3 py-1.5 text-[11px] text-cockpit-muted hover:text-red-400 rounded-lg border border-cockpit-border hover:border-red-400/30">
-                                <Trash2 size={11} /> Descartar
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  .map((idea: any) => {
+                    const linkedContent = idea.isUsed
+                      ? contents.find((c: Content) => c.ideaFeedId === idea.id || c.title === idea.title) ?? null
+                      : null
+                    return (
+                      <IdeaCard
+                        key={idea.id}
+                        idea={idea}
+                        linkedContent={linkedContent}
+                        onUse={() => handleUseIdea(idea)}
+                        onDiscard={() => handleDiscardIdea(idea.id)}
+                        onOpen={() => linkedContent && setSelectedContent(linkedContent)}
+                        isPending={isPending}
+                      />
+                    )
+                  })}
               </div>
             )}
           </div>
