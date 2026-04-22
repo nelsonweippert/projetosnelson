@@ -2,9 +2,8 @@ import { auth } from "@/lib/auth"
 import { getTaskStats } from "@/services/task.service"
 import { getReferenceStats } from "@/services/reference.service"
 import { getFinanceSummary } from "@/services/finance.service"
-import { getContentStats } from "@/services/content.service"
 import { redirect } from "next/navigation"
-import { CheckSquare, BookOpen, DollarSign, TrendingUp, TrendingDown, Target, Video } from "lucide-react"
+import { CheckSquare, BookOpen, DollarSign, TrendingUp, TrendingDown, Target, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { formatCurrency } from "@/lib/utils"
 
@@ -14,11 +13,10 @@ export default async function DashboardPage() {
   const userId = session.user.id
   const now = new Date()
 
-  const [taskStats, refStats, finance, contentStats] = await Promise.all([
+  const [taskStats, refStats, finance] = await Promise.all([
     getTaskStats(userId).catch(() => ({ todo: 0, inProgress: 0, done: 0, total: 0 })),
     getReferenceStats(userId).catch(() => ({ total: 0, unread: 0, reading: 0, read: 0 })),
     getFinanceSummary(userId).catch(() => ({ totalIncome: 0, totalExpense: 0, balance: 0, savingsRate: 0, month: now.getMonth() + 1, year: now.getFullYear() })),
-    getContentStats(userId).catch(() => ({ total: 0, ideas: 0, inProduction: 0, published: 0 })),
   ])
 
   const stats = [
@@ -129,36 +127,23 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        {/* Conteúdo */}
-        <div className="cockpit-card space-y-4">
+        {/* Content Hub (agora em app separado) */}
+        <div className="cockpit-card space-y-3">
           <div className="flex items-center gap-2">
-            <Video size={16} className="text-red-500" />
-            <h2 className="text-sm font-semibold text-cockpit-text">Pipeline de Conteúdo</h2>
+            <ExternalLink size={16} className="text-accent" />
+            <h2 className="text-sm font-semibold text-cockpit-text">Content Hub</h2>
           </div>
-          {contentStats.total === 0 ? (
-            <p className="text-sm text-cockpit-muted">Nenhum conteúdo cadastrado.</p>
-          ) : (
-            <div className="space-y-3">
-              {[
-                { label: "Ideias", count: contentStats.ideas, color: "bg-blue-400" },
-                { label: "Em produção", count: contentStats.inProduction, color: "bg-amber-400" },
-                { label: "Publicados", count: contentStats.published, color: "bg-emerald-500" },
-              ].map((item) => (
-                <div key={item.label}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-cockpit-muted">{item.label}</span>
-                    <span className="text-cockpit-text font-medium">{item.count}</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-cockpit-border-light rounded-full overflow-hidden">
-                    <div
-                      className={`h-full ${item.color} rounded-full transition-all`}
-                      style={{ width: contentStats.total > 0 ? `${(item.count / contentStats.total) * 100}%` : "0%" }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <p className="text-xs text-cockpit-muted">
+            Pesquisa, ideação e produção de conteúdo migraram pra um app dedicado.
+          </p>
+          <a
+            href="http://localhost:3020"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-accent/10 text-accent text-xs font-semibold border border-accent/20 rounded-xl hover:bg-accent/20"
+          >
+            Abrir Content Hub <ExternalLink size={12} />
+          </a>
         </div>
       </div>
 

@@ -22,7 +22,6 @@ const MODULE_OPTIONS = [
   { id: "tasks", label: "Tarefas", icon: CheckSquare, color: "text-blue-500" },
   { id: "finance", label: "Financeiro", icon: DollarSign, color: "text-emerald-500" },
   { id: "studies", label: "Estudos", icon: BookOpen, color: "text-purple-500" },
-  { id: "content", label: "Conteúdo", icon: Video, color: "text-red-500" },
 ] as const
 
 interface Props {
@@ -33,7 +32,7 @@ export function MotorIAClient({ initialInsights }: Props) {
   const [insights, setInsights] = useState<Insight[]>(initialInsights)
   const [activeInsight, setActiveInsight] = useState<string | null>(null)
   const [generatedText, setGeneratedText] = useState<string | null>(null)
-  const [selectedModule, setSelectedModule] = useState<"tasks" | "finance" | "studies" | "content">("tasks")
+  const [selectedModule, setSelectedModule] = useState<"tasks" | "finance" | "studies">("tasks")
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 

@@ -18,7 +18,6 @@ import {
   LogOut,
   Rocket,
   Layers,
-  Video,
   Sparkles,
   CalendarDays,
 } from "lucide-react"
@@ -31,7 +30,6 @@ const navItems = [
   { label: "Calendário", href: "/calendario", icon: CalendarDays },
   { label: "Estudos", href: "/estudos", icon: BookOpen },
   { label: "Financeiro", href: "/financeiro", icon: DollarSign },
-  { label: "Conteúdo", href: "/conteudo", icon: Video },
   { label: "Motor IA", href: "/ia", icon: Sparkles },
 ]
 

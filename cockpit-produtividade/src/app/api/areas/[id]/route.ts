@@ -9,7 +9,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id: areaId } = await params
   const userId = session.user.id
 
-  const [tasks, references, contents, transactions, calendarEvents] = await Promise.all([
+  const [tasks, references, transactions, calendarEvents] = await Promise.all([
     db.task.findMany({
       where: { userId, isArchived: false, areas: { some: { areaId } } },
       include: { areas: { include: { area: true } }, subtasks: { orderBy: { order: "asc" } } },
@@ -18,11 +18,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     db.reference.findMany({
       where: { userId, isArchived: false, OR: [{ areaId }, { areas: { some: { areaId } } }] },
       include: { areas: { include: { area: true } }, area: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    db.content.findMany({
-      where: { userId, isArchived: false, OR: [{ areaId }, { areas: { some: { areaId } } }] },
-      include: { area: true, areas: { include: { area: true } } },
       orderBy: { createdAt: "desc" },
     }),
     db.transaction.findMany({
@@ -38,5 +33,5 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     }),
   ])
 
-  return NextResponse.json({ tasks, references, contents, transactions, calendarEvents })
+  return NextResponse.json({ tasks, references, contents: [], transactions, calendarEvents })
 }

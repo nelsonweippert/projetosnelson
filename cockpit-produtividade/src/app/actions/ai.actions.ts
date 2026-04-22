@@ -20,7 +20,7 @@ export async function generateWeeklyReviewAction(): Promise<ActionResult<string>
   }
 }
 
-export async function generateModuleInsightAction(module: "tasks" | "finance" | "studies" | "content"): Promise<ActionResult<string>> {
+export async function generateModuleInsightAction(module: "tasks" | "finance" | "studies"): Promise<ActionResult<string>> {
   try {
     const userId = await getUserId()
     const insight = await generateModuleInsight(userId, module)

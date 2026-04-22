@@ -17,8 +17,6 @@ export type {
   Transaction,
   FinancialGoal,
   Reference,
-  Content,
-  ContentMetrics,
   AiInsight,
   CalendarEvent,
   TaskStatus,
@@ -29,9 +27,6 @@ export type {
   ReferenceType,
   ReferenceStatus,
   ReferencePriority,
-  Platform,
-  ContentFormat,
-  ContentPhase,
   EventType,
 } from "@/generated/prisma/client"
 
@@ -83,16 +78,6 @@ export type CreateReferenceInput = {
   tags?: string[]
   areaId?: string | null
   plannedDate?: string | null
-}
-
-export type CreateContentInput = {
-  title: string
-  platform?: "YOUTUBE" | "INSTAGRAM" | "TIKTOK" | "TWITCH" | "OTHER"
-  format?: "LONG_VIDEO" | "SHORT" | "REELS" | "POST" | "LIVE" | "THREAD"
-  hook?: string
-  series?: string
-  plannedDate?: Date | null
-  areaId?: string | null
 }
 
 export type FinanceSummary = {
