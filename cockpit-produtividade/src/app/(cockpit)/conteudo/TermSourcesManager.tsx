@@ -39,8 +39,23 @@ interface Props {
   onSourcesChange: (sources: TermSource[]) => void
 }
 
+type DiscoverStage = "decomp" | "discover" | "validate"
+
+async function callStage<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  let data: { success: boolean; error?: string; data?: T }
+  try { data = await res.json() } catch { throw new Error(`${url}: HTTP ${res.status} — resposta inválida`) }
+  if (!res.ok || !data.success) throw new Error(data.error || `${url}: HTTP ${res.status}`)
+  return data.data as T
+}
+
 export function TermSourcesManager({ termId, sources, onSourcesChange }: Props) {
   const [discovering, setDiscovering] = useState(false)
+  const [currentStage, setCurrentStage] = useState<DiscoverStage | null>(null)
   const [discoverStartedAt, setDiscoverStartedAt] = useState<number | null>(null)
   const [discoverElapsed, setDiscoverElapsed] = useState(0)
   const [lastResult, setLastResult] = useState<{ found: number; rejected: number; durationMs: number } | null>(null)
@@ -65,33 +80,41 @@ export function TermSourcesManager({ termId, sources, onSourcesChange }: Props) 
     setDiscoverElapsed(0)
     setError(null)
     setLastResult(null)
+    const pipelineStart = Date.now()
     try {
-      // API route com maxDuration=300. Server actions tem timeout curto.
-      const res = await fetch("/api/content/sources/discover", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ termId }),
+      // Estágio 1: Decomposição (~15s)
+      setCurrentStage("decomp")
+      const { decomposition } = await callStage<{ decomposition: unknown }>(
+        "/api/content/sources/discover/stage1",
+        { termId },
+      )
+
+      // Estágio 2: Descoberta (~40s)
+      setCurrentStage("discover")
+      const { candidates } = await callStage<{ candidates: unknown[] }>(
+        "/api/content/sources/discover/stage2",
+        { termId, decomposition },
+      )
+
+      // Estágio 3: Validação + ranking + persistência (~60s)
+      setCurrentStage("validate")
+      const stage3 = await callStage<{ sources: TermSource[]; found: number; rejected: unknown[] }>(
+        "/api/content/sources/discover/stage3",
+        { termId, decomposition, candidates },
+      )
+
+      onSourcesChange(stage3.sources)
+      setLastResult({
+        found: stage3.found,
+        rejected: stage3.rejected.length,
+        durationMs: Date.now() - pipelineStart,
       })
-      let data: { success: boolean; error?: string; data?: { sources: TermSource[]; _discovery?: { found: number; rejected: { host: string; reason: string }[]; usage: { totalDurationMs: number } } } }
-      try { data = await res.json() } catch { throw new Error(`HTTP ${res.status} — resposta inválida`) }
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || `HTTP ${res.status}`)
-      }
-      const updated = data.data!
-      const newSources = Array.isArray(updated.sources) ? updated.sources : []
-      onSourcesChange(newSources)
-      if (updated._discovery) {
-        setLastResult({
-          found: updated._discovery.found,
-          rejected: updated._discovery.rejected.length,
-          durationMs: updated._discovery.usage.totalDurationMs,
-        })
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado")
     } finally {
       setDiscovering(false)
       setDiscoverStartedAt(null)
+      setCurrentStage(null)
     }
   }
 
@@ -155,21 +178,22 @@ export function TermSourcesManager({ termId, sources, onSourcesChange }: Props) 
         </div>
       )}
 
-      {/* Progress dos 3 estágios durante descoberta */}
-      {discovering && (() => {
-        const stages = [
-          { id: "decomp", label: "Decompondo tema", detail: "subtemas, jargão, perfis-alvo, queries planejadas", maxSec: 20 },
-          { id: "discover", label: "Descoberta multi-estratégia", detail: "executando 6-10 queries web_search", maxSec: 70 },
-          { id: "validate", label: "Validação + ranking", detail: "site: por candidato, score em 5 dimensões", maxSec: 140 },
+      {/* Progress dos 3 estágios — currentStage real via callStage sequencial */}
+      {discovering && currentStage && (() => {
+        const stages: { id: DiscoverStage; label: string; detail: string }[] = [
+          { id: "decomp", label: "Decompondo tema", detail: "subtemas, jargão, perfis-alvo, queries planejadas (~15s)" },
+          { id: "discover", label: "Descoberta multi-estratégia", detail: "executando 6-10 queries web_search (~40s)" },
+          { id: "validate", label: "Validação + ranking", detail: "site: por candidato, score em 5 dimensões (~60s)" },
         ]
-        const idx = stages.findIndex((s) => discoverElapsed < s.maxSec)
-        const effectiveIdx = idx === -1 ? stages.length - 1 : idx
+        const effectiveIdx = stages.findIndex((s) => s.id === currentStage)
         return (
           <div className="p-3 bg-cockpit-bg border border-accent/20 rounded-lg space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Loader2 size={12} className="animate-spin text-accent" />
-                <span className="text-[11px] font-semibold text-cockpit-text">{stages[effectiveIdx].label}</span>
+                <span className="text-[11px] font-semibold text-cockpit-text">
+                  Estágio {effectiveIdx + 1}/3 · {stages[effectiveIdx].label}
+                </span>
               </div>
               <span className="text-[11px] text-cockpit-muted tabular-nums">{discoverElapsed}s</span>
             </div>
@@ -178,16 +202,12 @@ export function TermSourcesManager({ termId, sources, onSourcesChange }: Props) 
               {stages.map((s, i) => {
                 const done = i < effectiveIdx
                 const current = i === effectiveIdx
-                const prevMax = i === 0 ? 0 : stages[i - 1].maxSec
-                const pct = current
-                  ? Math.min(100, ((discoverElapsed - prevMax) / (s.maxSec - prevMax)) * 100)
-                  : done ? 100 : 0
                 return (
                   <div key={s.id} className="flex-1 h-1 bg-cockpit-border-light rounded-full overflow-hidden">
                     <div className={cn(
-                      "h-full rounded-full transition-all",
-                      done ? "bg-emerald-500" : current ? "bg-accent" : "bg-cockpit-border"
-                    )} style={{ width: `${pct}%` }} />
+                      "h-full rounded-full transition-all duration-500",
+                      done ? "bg-emerald-500 w-full" : current ? "bg-accent w-1/2 animate-pulse" : "w-0"
+                    )} />
                   </div>
                 )
               })}

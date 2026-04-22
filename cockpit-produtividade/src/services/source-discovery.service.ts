@@ -24,7 +24,7 @@ const STRATEGIES = [
   "aggregator_validation", // techmeme, feedly top, HN — curadoria 2ª ordem
 ] as const
 
-const DecompositionSchema = z.object({
+export const DecompositionSchema = z.object({
   subtemas: z.array(z.string()).describe("5-8 subtemas principais dentro do tema"),
   jargao: z.array(z.string()).describe("5-10 termos técnicos/jargão que experts usam"),
   perfis_alvo: z.object({
@@ -41,7 +41,7 @@ const DecompositionSchema = z.object({
   })).describe("4-10 queries cobrindo múltiplas estratégias complementares"),
 })
 
-const RawCandidateSchema = z.object({
+export const RawCandidateSchema = z.object({
   host: z.string().describe("Domínio raiz sem www, sem https://, sem path. Ex: folha.uol.com.br"),
   name: z.string().describe("Nome editorial do veículo"),
   language: z.enum(["pt-BR", "en", "es"]),
@@ -49,7 +49,7 @@ const RawCandidateSchema = z.object({
   foundVia: z.array(z.string()).describe("Quais estratégias/queries encontraram essa fonte"),
   snippet: z.string().describe("Razão breve pela qual a fonte é relevante pro tema"),
 })
-const DiscoveryResponseSchema = z.object({
+export const DiscoveryResponseSchema = z.object({
   candidates: z.array(RawCandidateSchema).describe("10-50 candidatos brutos sem filtrar"),
 })
 
@@ -192,7 +192,7 @@ REGRAS
 FORMATO: JSON conforme schema.`
 }
 
-async function stageDecomposition(opts: {
+export async function stageDecomposition(opts: {
   term: string
   intent?: string | null
   userId: string
@@ -255,7 +255,7 @@ ANTI-PADRÕES (descartar imediatamente)
 FORMATO: JSON { candidates: [...] } conforme schema.`
 }
 
-async function stageDiscovery(opts: {
+export async function stageDiscovery(opts: {
   term: string
   intent?: string | null
   decomposition: z.infer<typeof DecompositionSchema>
@@ -356,7 +356,7 @@ REGRAS FINAIS
 FORMATO: JSON { sources: [...], rejected: [...] } conforme schema.`
 }
 
-async function stageRanking(opts: {
+export async function stageRanking(opts: {
   term: string
   intent?: string | null
   candidates: z.infer<typeof DiscoveryResponseSchema>["candidates"]
