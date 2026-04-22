@@ -477,6 +477,7 @@ model IdeaFeed {
   platformFit          Json?      // { reels: number, shorts: number, long: number, tiktok: number }
   isUsed        Boolean   @default(false)
   isDiscarded   Boolean   @default(false)
+  isFavorite    Boolean   @default(false)    // estrela — destaca ideias prioritárias
   createdAt     DateTime  @default(now())
 
   userId String

@@ -93,6 +93,20 @@ export async function markIdeaUsedAction(id: string): Promise<ActionResult> {
   } catch { return { success: false, error: "Erro" } }
 }
 
+export async function toggleIdeaFavoriteAction(id: string): Promise<ActionResult> {
+  try {
+    const userId = await getUserId()
+    const current = await db.ideaFeed.findFirst({ where: { id, userId }, select: { isFavorite: true } })
+    if (!current) return { success: false, error: "Ideia não encontrada" }
+    const updated = await db.ideaFeed.update({
+      where: { id, userId },
+      data: { isFavorite: !current.isFavorite },
+      select: { isFavorite: true },
+    })
+    return { success: true, data: updated }
+  } catch { return { success: false, error: "Erro ao favoritar" } }
+}
+
 // Novo modo: usuário dá UM tema/palavra-chave, pipeline roda focado gerando 1 ideia pesquisada.
 // Não usa monitor terms. Não persiste o tema (não adiciona em MonitorTerm).
 export async function generateIdeaForThemeAction(theme: string): Promise<ActionResult> {

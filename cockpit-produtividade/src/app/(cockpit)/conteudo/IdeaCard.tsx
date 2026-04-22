@@ -1,6 +1,6 @@
 "use client"
 
-import { Plus, Trash2, ExternalLink, Loader2 } from "lucide-react"
+import { Plus, Trash2, ExternalLink, Loader2, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type PlatformFit = { reels: number; shorts: number; long: number; tiktok: number } | null
@@ -51,10 +51,11 @@ interface IdeaCardProps {
   onUse: () => void
   onDiscard: () => void
   onOpen: () => void  // abre painel do Content quando linkedContent existe
+  onToggleFavorite: () => void
   isPending: boolean
 }
 
-export function IdeaCard({ idea, linkedContent, onUse, onDiscard, onOpen, isPending }: IdeaCardProps) {
+export function IdeaCard({ idea, linkedContent, onUse, onDiscard, onOpen, onToggleFavorite, isPending }: IdeaCardProps) {
   const isUsed = !!idea.isUsed
   const currentPhase = linkedContent?.phase as string | undefined
   const currentPhaseIdx = currentPhase ? PHASE_ORDER.indexOf(currentPhase as typeof PHASE_ORDER[number]) : -1
@@ -74,7 +75,9 @@ export function IdeaCard({ idea, linkedContent, onUse, onDiscard, onOpen, isPend
   return (
     <div className={cn(
       "rounded-xl border transition-all",
-      isUsed ? "border-emerald-500/20 bg-emerald-500/[0.02]" : "border-cockpit-border bg-cockpit-surface hover:border-accent/30"
+      idea.isFavorite ? "border-amber-400/40 bg-amber-500/[0.03]" :
+      isUsed ? "border-emerald-500/20 bg-emerald-500/[0.02]" :
+      "border-cockpit-border bg-cockpit-surface hover:border-accent/30"
     )}>
       {/* ─── HEADER: score + título + meta ─── */}
       <div className="p-4 flex items-start gap-3">
@@ -88,9 +91,18 @@ export function IdeaCard({ idea, linkedContent, onUse, onDiscard, onOpen, isPend
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-sm font-semibold text-cockpit-text leading-snug">{idea.title}</h3>
-            {idea.createdAt && (
-              <span className="text-[10px] text-cockpit-muted whitespace-nowrap shrink-0 mt-0.5">{timeAgo(idea.createdAt)}</span>
-            )}
+            <div className="flex items-center gap-2 shrink-0">
+              {idea.createdAt && (
+                <span className="text-[10px] text-cockpit-muted whitespace-nowrap">{timeAgo(idea.createdAt)}</span>
+              )}
+              <button onClick={onToggleFavorite} title={idea.isFavorite ? "Remover dos favoritos" : "Favoritar"}
+                className={cn(
+                  "p-1 rounded-lg transition-colors",
+                  idea.isFavorite ? "text-amber-400 hover:text-amber-500" : "text-cockpit-muted hover:text-amber-400"
+                )}>
+                <Star size={14} fill={idea.isFavorite ? "currentColor" : "none"} />
+              </button>
+            </div>
           </div>
           {idea.summary && (
             <p className="text-xs text-cockpit-muted mt-1 line-clamp-2 leading-relaxed">{idea.summary}</p>

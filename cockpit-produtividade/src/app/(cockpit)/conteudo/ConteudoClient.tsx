@@ -11,7 +11,7 @@ import {
 import { cn, formatDate } from "@/lib/utils"
 import { createContentAction, archiveContentAction, advanceContentPhaseAction } from "@/app/actions/content.actions"
 import { getSkillSourcesAction, addSkillSourceAction, deleteSkillSourceAction } from "@/app/actions/skill.actions"
-import { getMonitorTermsAction, addMonitorTermAction, deleteMonitorTermAction, updateMonitorTermIntentAction, getIdeasAction, discardIdeaAction, markIdeaUsedAction, generateIdeasNowAction, generateIdeaForThemeAction } from "@/app/actions/idea.actions"
+import { getMonitorTermsAction, addMonitorTermAction, deleteMonitorTermAction, updateMonitorTermIntentAction, getIdeasAction, discardIdeaAction, markIdeaUsedAction, generateIdeasNowAction, generateIdeaForThemeAction, toggleIdeaFavoriteAction } from "@/app/actions/idea.actions"
 import { CONTENT_SKILLS, SKILL_LIST, ALL_SKILLS, type SkillId } from "@/config/content-skills"
 import type { Area, ContentPhase, Platform, ContentFormat } from "@/types"
 import { DatePicker } from "@/components/ui/DatePicker"
@@ -97,6 +97,11 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   const [manualStory, setManualStory] = useState("")
   const [manualLoading, setManualLoading] = useState(false)
   const [manageTermsOpen, setManageTermsOpen] = useState(false)
+  // Tracker do estágio do pipeline (client-side, baseado em tempo elapsed)
+  const [pipelineStartedAt, setPipelineStartedAt] = useState<number | null>(null)
+  const [pipelineElapsed, setPipelineElapsed] = useState(0)
+  // Ordenação
+  const [ideaSort, setIdeaSort] = useState<"recent" | "pioneer" | "viral">("recent")
 
   useEffect(() => {
     if (tab === "ideas" && !ideasLoaded) {
@@ -122,6 +127,15 @@ export function ConteudoClient({ initialContents, areas }: Props) {
     const active = monitorTerms.filter((t: any) => t.isActive).map((t: any) => t.term)
     if (active.length > 0) setIdeaTermFilter(active[0])
   }, [tab, ideaTermFilter, monitorTerms])
+
+  // Timer do pipeline — atualiza elapsed a cada segundo enquanto rodando
+  useEffect(() => {
+    if (!pipelineStartedAt) return
+    const interval = setInterval(() => {
+      setPipelineElapsed(Math.floor((Date.now() - pipelineStartedAt) / 1000))
+    }, 500)
+    return () => clearInterval(interval)
+  }, [pipelineStartedAt])
 
   async function handleAddTerm() {
     if (!newTerm.trim()) return
@@ -156,6 +170,8 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   async function handleGenerateIdeas() {
     setGeneratingIdeas(true)
     setIdeaError(null)
+    setPipelineStartedAt(Date.now())
+    setPipelineElapsed(0)
     try {
       const result = await generateIdeasNowAction()
       if (result.success) {
@@ -170,6 +186,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
       setIdeaError(`Erro: ${err?.message || "falha inesperada"}`)
     }
     setGeneratingIdeas(false)
+    setPipelineStartedAt(null)
   }
 
   async function handleDiscardIdea(id: string) {
@@ -177,11 +194,23 @@ export function ConteudoClient({ initialContents, areas }: Props) {
     setIdeaFeed((p) => p.filter((i) => i.id !== id))
   }
 
+  async function handleToggleFavorite(id: string) {
+    // Optimistic update
+    setIdeaFeed((p) => p.map((i) => i.id === id ? { ...i, isFavorite: !i.isFavorite } : i))
+    const res = await toggleIdeaFavoriteAction(id)
+    if (!res.success) {
+      // Rollback em caso de erro
+      setIdeaFeed((p) => p.map((i) => i.id === id ? { ...i, isFavorite: !i.isFavorite } : i))
+    }
+  }
+
   // Pesquisa 1 tema focado via pipeline completo (RSS + Claude + triangulação)
   async function handleThemeIdea() {
     if (!customIdeaInput.trim()) return
     setCustomIdeaLoading(true)
     setIdeaError(null)
+    setPipelineStartedAt(Date.now())
+    setPipelineElapsed(0)
     try {
       const res = await generateIdeaForThemeAction(customIdeaInput.trim())
       if (res.success) {
@@ -195,6 +224,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
       setIdeaError(`Erro: ${err?.message || "conexão falhou"}`)
     }
     setCustomIdeaLoading(false)
+    setPipelineStartedAt(null)
   }
 
   async function handleCustomIdea() {
@@ -863,35 +893,97 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                       {showUsedIdeas ? "Esconder" : "Em produção"} <span className="text-[10px] opacity-70 ml-1">{usedWithContent}</span>
                     </button>
                   )}
+                  {/* Ordenação */}
+                  <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1 ml-auto">
+                    <span className="text-[10px] text-cockpit-muted px-1.5">Ordem:</span>
+                    {([
+                      { k: "recent" as const, l: "Recente" },
+                      { k: "pioneer" as const, l: "Pioneer" },
+                      { k: "viral" as const, l: "Viral" },
+                    ]).map(({ k, l }) => (
+                      <button key={k} onClick={() => setIdeaSort(k)}
+                        className={cn("px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors",
+                          ideaSort === k ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )
             })()}
 
-            {/* Skeletons durante pesquisa ativa */}
-            {(generatingIdeas || customIdeaLoading) && (
-              <div className="space-y-2">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="rounded-xl border border-cockpit-border bg-cockpit-surface p-4 animate-pulse">
-                    <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-cockpit-border-light shrink-0" />
-                      <div className="flex-1 space-y-2">
-                        <div className="h-4 bg-cockpit-border-light rounded w-3/4" />
-                        <div className="h-3 bg-cockpit-border-light rounded w-full" />
-                        <div className="h-3 bg-cockpit-border-light rounded w-5/6" />
-                        <div className="flex gap-2 pt-1">
-                          <div className="h-5 w-16 bg-cockpit-border-light rounded-md" />
-                          <div className="h-5 w-20 bg-cockpit-border-light rounded-md" />
-                          <div className="h-5 w-14 bg-cockpit-border-light rounded-md" />
-                        </div>
+            {/* Progresso do pipeline em tempo real */}
+            {(generatingIdeas || customIdeaLoading) && (() => {
+              // Estágios do pipeline com janelas de tempo estimadas (client-side tracker)
+              const stages = [
+                { id: "rss", label: "Descobrindo fontes", detail: "RSS Google News em PT-BR e EN", maxSec: 10 },
+                { id: "triage", label: "Lendo matérias", detail: "Haiku web_fetch + classificação por intenção", maxSec: 45 },
+                { id: "deep", label: "Triangulando", detail: "Cross-publisher + cross-language", maxSec: 75 },
+                { id: "narrative", label: "Gerando ideias", detail: "Sonnet narrativa + platformFit", maxSec: 95 },
+              ]
+              const currentIdx = stages.findIndex((s) => pipelineElapsed < s.maxSec)
+              const effectiveIdx = currentIdx === -1 ? stages.length - 1 : currentIdx
+              return (
+                <div className="cockpit-card p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Loader2 size={16} className="animate-spin text-accent" />
+                      <div>
+                        <p className="text-sm font-semibold text-cockpit-text">Pipeline rodando</p>
+                        <p className="text-[11px] text-cockpit-muted">{stages[effectiveIdx].detail}</p>
                       </div>
                     </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-cockpit-text tabular-nums">{pipelineElapsed}s</p>
+                      <p className="text-[10px] text-cockpit-muted uppercase tracking-wider">elapsed</p>
+                    </div>
                   </div>
-                ))}
-                <p className="text-[11px] text-cockpit-muted text-center italic">
-                  Pipeline rodando: RSS → triagem → triangulação → narrativa. Pode levar ~90s.
-                </p>
-              </div>
-            )}
+
+                  {/* 4 estágios com progress bars */}
+                  <div className="space-y-2">
+                    {stages.map((s, i) => {
+                      const done = i < effectiveIdx
+                      const current = i === effectiveIdx
+                      const prevMax = i === 0 ? 0 : stages[i - 1].maxSec
+                      const stagePct = current
+                        ? Math.min(100, ((pipelineElapsed - prevMax) / (s.maxSec - prevMax)) * 100)
+                        : done ? 100 : 0
+                      return (
+                        <div key={s.id} className="flex items-center gap-3">
+                          <div className={cn(
+                            "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2 shrink-0",
+                            done ? "bg-emerald-500 border-emerald-500 text-white" :
+                            current ? "bg-accent/20 border-accent text-accent animate-pulse" :
+                            "bg-cockpit-bg border-cockpit-border text-cockpit-muted"
+                          )}>
+                            {done ? "✓" : i + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <span className={cn(
+                                "text-xs font-medium",
+                                done ? "text-cockpit-muted" : current ? "text-cockpit-text" : "text-cockpit-muted/60"
+                              )}>{s.label}</span>
+                              {current && <span className="text-[10px] text-accent tabular-nums">~{Math.max(0, s.maxSec - pipelineElapsed)}s restantes</span>}
+                            </div>
+                            <div className="h-1 bg-cockpit-border-light rounded-full overflow-hidden">
+                              <div className={cn(
+                                "h-full rounded-full transition-all duration-500",
+                                done ? "bg-emerald-500" : current ? "bg-accent" : "bg-cockpit-border"
+                              )} style={{ width: `${stagePct}%` }} />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  <p className="text-[10px] text-cockpit-muted text-center italic pt-1 border-t border-cockpit-border">
+                    Tempos estimados com base em runs anteriores. Pode variar conforme os termos.
+                  </p>
+                </div>
+              )
+            })()}
 
             {visibleIdeaFeed.length === 0 && !generatingIdeas && !customIdeaLoading ? (
               <div className="cockpit-card flex flex-col items-center justify-center py-16 text-cockpit-muted">
@@ -926,6 +1018,20 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                     }
                     return i.term === ideaTermFilter
                   })
+                  .sort((a: any, b: any) => {
+                    // Favoritas SEMPRE primeiro, não importa a ordenação
+                    if (!!a.isFavorite !== !!b.isFavorite) return a.isFavorite ? -1 : 1
+                    if (ideaSort === "pioneer") {
+                      return (b.pioneerScore ?? 0) - (a.pioneerScore ?? 0)
+                    }
+                    if (ideaSort === "viral") {
+                      return (b.viralScore ?? 0) - (a.viralScore ?? 0)
+                    }
+                    // recent — default
+                    const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0
+                    const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0
+                    return tb - ta
+                  })
                   .map((idea: any) => {
                     const linkedContent = idea.isUsed
                       ? contents.find((c: Content) => c.ideaFeedId === idea.id || c.title === idea.title) ?? null
@@ -938,6 +1044,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                         onUse={() => handleUseIdea(idea)}
                         onDiscard={() => handleDiscardIdea(idea.id)}
                         onOpen={() => linkedContent && setSelectedContent(linkedContent)}
+                        onToggleFavorite={() => handleToggleFavorite(idea.id)}
                         isPending={isPending}
                       />
                     )
