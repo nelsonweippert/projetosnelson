@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
 
   const body = await req.json()
-  const { action, skill, phase, title, hook, script, notes, series, research, targetDuration } = body as {
+  const { action, skill, phase, title, hook, script, notes, series, research, targetDuration, durationStrategy } = body as {
     action: string
     skill?: SkillId
     phase?: string
@@ -27,6 +27,14 @@ export async function POST(req: NextRequest) {
     series?: string
     research?: string
     targetDuration?: number
+    durationStrategy?: {
+      strategyName: string
+      strategyBrief: string
+      hookGuide: string
+      scriptGuide: string
+      titleGuide: string
+      descriptionGuide: string
+    }
   }
 
   function formatDuration(s?: number) {
@@ -34,12 +42,21 @@ export async function POST(req: NextRequest) {
     return s >= 60 ? `${Math.floor(s / 60)} minutos${s % 60 > 0 ? ` e ${s % 60} segundos` : ""}` : `${s} segundos`
   }
   const isShortContent = skill === "SHORT_VIDEO" || skill === "INSTAGRAM"
+  // Se a skill tem durationStrategy específica, usa ela. Senão, fallback genérico.
   const durationCtx = targetDuration
-    ? `\n- Duração alvo: ${formatDuration(targetDuration)} — ${isShortContent
-      ? "CONTEÚDO CURTO: ritmo rápido, cortes a cada 2-3s, hooks de 1-3s, sem enrolação. Cada segundo conta."
-      : "CONTEÚDO LONGO: estruture com capítulos, use open loops a cada 3-4 min, pattern interrupts a cada 30-60s."
-    } ADAPTE o roteiro para caber EXATAMENTE nesta duração.`
+    ? (durationStrategy
+      ? `\n- Duração alvo: ${formatDuration(targetDuration)}\n- Estratégia escolhida: **${durationStrategy.strategyName}** — ${durationStrategy.strategyBrief}`
+      : `\n- Duração alvo: ${formatDuration(targetDuration)} — ${isShortContent
+        ? "CONTEÚDO CURTO: ritmo rápido, cortes a cada 2-3s, hooks de 1-3s, sem enrolação. Cada segundo conta."
+        : "CONTEÚDO LONGO: estruture com capítulos, use open loops a cada 3-4 min, pattern interrupts a cada 30-60s."
+      } ADAPTE o roteiro para caber EXATAMENTE nesta duração.`)
     : ""
+
+  // Guides específicos por ação, derivados da estratégia escolhida
+  const hookDirective = durationStrategy?.hookGuide ? `\n\nDIRETRIZ DE HOOK (estratégia ${durationStrategy.strategyName}):\n${durationStrategy.hookGuide}` : ""
+  const scriptDirective = durationStrategy?.scriptGuide ? `\n\nDIRETRIZ DE ROTEIRO (estratégia ${durationStrategy.strategyName}):\n${durationStrategy.scriptGuide}` : ""
+  const titleDirective = durationStrategy?.titleGuide ? `\n\nDIRETRIZ DE TÍTULO (estratégia ${durationStrategy.strategyName}):\n${durationStrategy.titleGuide}` : ""
+  const descriptionDirective = durationStrategy?.descriptionGuide ? `\n\nDIRETRIZ DE DESCRIÇÃO (estratégia ${durationStrategy.strategyName}):\n${durationStrategy.descriptionGuide}` : ""
 
   const skillConfig = skill ? CONTENT_SKILLS[skill] : null
   const phaseConfig = skillConfig?.phases.find((p) => p.id === phase)
@@ -49,7 +66,7 @@ export async function POST(req: NextRequest) {
 
   switch (action) {
     case "generate_hook": {
-      const hookPrompt = `${aiContext}
+      const hookPrompt = `${aiContext}${hookDirective}
 
 Contexto do conteúdo:
 - Tipo: ${skillConfig?.label ?? "Geral"}
@@ -57,7 +74,7 @@ Contexto do conteúdo:
 ${notes ? `- Notas: ${notes}` : ""}
 ${series ? `- Série: ${series}` : ""}
 
-Gere 5 opções de HOOK. Retorne APENAS um JSON array:
+Gere 5 opções de HOOK seguindo a DIRETRIZ acima. Retorne APENAS um JSON array:
 [{"text": "texto do hook", "style": "estilo usado (pergunta/chocante/estatística/POV/direto)", "why": "por que funciona"}]`
       try {
         const result = await generateContentSuggestion(SYSTEM_PROMPT_JSON, hookPrompt)
@@ -69,14 +86,14 @@ Gere 5 opções de HOOK. Retorne APENAS um JSON array:
     }
 
     case "generate_titles": {
-      const titlesPrompt = `${aiContext}
+      const titlesPrompt = `${aiContext}${titleDirective}
 
 Contexto:
 - Tipo: ${skillConfig?.label ?? "Geral"}
 - Tema/Título atual: ${title ?? "Não definido"}${durationCtx}
 ${hook ? `- Hook: ${hook}` : ""}
 
-Gere 6 variações de TÍTULO otimizados para clique. Retorne APENAS um JSON array:
+Gere 6 variações de TÍTULO otimizados para clique, seguindo a DIRETRIZ acima. Retorne APENAS um JSON array:
 [{"text": "título aqui", "style": "técnica usada (curiosity gap/números/urgência/como fazer/contraste)", "why": "por que gera clique"}]
 Cada título < 60 caracteres.`
       try {
@@ -108,7 +125,7 @@ A série deve ter progressão lógica.`
     }
 
     case "generate_script":
-      prompt = `${aiContext}
+      prompt = `${aiContext}${scriptDirective}
 
 Contexto do conteúdo:
 - Tipo: ${skillConfig?.label ?? "Geral"}
@@ -117,8 +134,8 @@ ${hook ? `- Hook definido: ${hook}` : ""}
 ${research ? `- Pesquisa/referências: ${research}` : ""}
 ${notes ? `- Notas: ${notes}` : ""}
 
-Escreva um roteiro COMPLETO que caiba na duração alvo, seguindo as boas práticas da skill.
-${skillConfig?.scriptTemplates?.[0] ? `Use como base a estrutura: ${skillConfig.scriptTemplates[0].structure.join(" → ")}` : ""}
+Escreva um roteiro COMPLETO que caiba na duração alvo, seguindo a DIRETRIZ DE ROTEIRO acima (quando presente) e as boas práticas da skill.
+${skillConfig?.scriptTemplates?.[0] ? `Template-base: ${skillConfig.scriptTemplates[0].structure.join(" → ")}` : ""}
 
 FORMATO DO ROTEIRO:
 - Divida em BLOCOS claros (ABERTURA, BLOCO 1, BLOCO 2, etc., FECHAMENTO)
@@ -282,7 +299,7 @@ Numere cada conceito.`
       break
 
     case "generate_description":
-      prompt = `${aiContext}
+      prompt = `${aiContext}${descriptionDirective}
 
 Contexto do conteúdo:
 - Tipo: ${skillConfig?.label ?? "Geral"}
@@ -291,7 +308,7 @@ ${hook ? `- Hook: ${hook}` : ""}
 ${script ? `- Roteiro (resumo): ${script.substring(0, 500)}` : ""}
 ${notes ? `- Notas: ${notes}` : ""}
 
-Gere uma DESCRIÇÃO/CAPTION completa para publicação na plataforma.
+Gere uma DESCRIÇÃO/CAPTION seguindo a DIRETRIZ acima (quando presente) e otimizada pra publicação na plataforma.
 Inclua:
 1. Descrição otimizada para SEO (keywords naturais no texto)
 2. Call-to-action

@@ -93,6 +93,76 @@ export async function markIdeaUsedAction(id: string): Promise<ActionResult> {
   } catch { return { success: false, error: "Erro" } }
 }
 
+// Novo modo: usuário dá UM tema/palavra-chave, pipeline roda focado gerando 1 ideia pesquisada.
+// Não usa monitor terms. Não persiste o tema (não adiciona em MonitorTerm).
+export async function generateIdeaForThemeAction(theme: string): Promise<ActionResult> {
+  try {
+    const userId = await getUserId()
+    const clean = theme.trim()
+    if (!clean) return { success: false, error: "Tema obrigatório" }
+    if (clean.length > 100) return { success: false, error: "Tema muito longo (máx 100)" }
+
+    const { generateIdeasWithResearch, safeDate } = await import("@/services/ai.service")
+    const { ideas, usage } = await generateIdeasWithResearch({
+      terms: [clean],
+      ideasPerTerm: 1,
+      hoursWindow: 72,
+      language: "both",
+      userId,
+    })
+
+    if (ideas.length === 0) {
+      const stage = usage.candidatesFromRss === 0
+        ? "discovery (nenhuma matéria encontrada pra esse tema nas últimas 72h)"
+        : usage.qualifiedAfterTriage === 0
+        ? `triagem (${usage.candidatesFromRss} candidatos lidos, nenhum passou)`
+        : "narrativa (fontes insuficientes)"
+      return { success: false, error: `Nenhuma ideia gerada — travou em: ${stage}` }
+    }
+
+    const created = await db.ideaFeed.createMany({
+      data: ideas.map((idea) => ({
+        title: idea.title,
+        summary: idea.summary,
+        angle: idea.angle,
+        hook: idea.hook,
+        term: idea.term,
+        relevance: idea.relevance,
+        source: idea.sourceTitle,
+        sourceUrl: idea.sourceUrl,
+        publishedAt: safeDate(idea.publishedAt),
+        language: idea.language ?? "pt-BR",
+        pioneerScore: idea.pioneerScore,
+        evidenceId: idea.evidenceId,
+        evidenceQuote: idea.evidenceQuote,
+        supportingEvidenceIds: idea.supportingEvidenceIds,
+        viralScore: idea.viralScore,
+        publisherHosts: idea.publisherHosts,
+        hasInternationalCoverage: idea.hasInternationalCoverage,
+        platformFit: idea.platformFit as unknown as Prisma.InputJsonValue,
+        score: Math.min(100, Math.max(0, idea.pioneerScore)),
+        userId,
+      })),
+    })
+
+    console.log(`[generateIdeaForTheme] user=${userId} theme="${clean}" rss=${usage.candidatesFromRss} qualified=${usage.qualifiedAfterTriage} ideas=${created.count}`)
+
+    revalidatePath("/conteudo")
+    return {
+      success: true,
+      data: {
+        count: created.count,
+        theme: clean,
+        candidatesFromRss: usage.candidatesFromRss,
+      },
+    }
+  } catch (err) {
+    console.error("[generateIdeaForTheme]", err)
+    const msg = err instanceof Error ? err.message : "Erro ao gerar ideia"
+    return { success: false, error: msg }
+  }
+}
+
 export async function generateIdeasNowAction(): Promise<ActionResult> {
   try {
     const userId = await getUserId()

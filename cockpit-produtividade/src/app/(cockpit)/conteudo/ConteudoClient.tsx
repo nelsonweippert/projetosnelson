@@ -11,7 +11,7 @@ import {
 import { cn, formatDate } from "@/lib/utils"
 import { createContentAction, archiveContentAction, advanceContentPhaseAction } from "@/app/actions/content.actions"
 import { getSkillSourcesAction, addSkillSourceAction, deleteSkillSourceAction } from "@/app/actions/skill.actions"
-import { getMonitorTermsAction, addMonitorTermAction, deleteMonitorTermAction, updateMonitorTermIntentAction, getIdeasAction, discardIdeaAction, markIdeaUsedAction, generateIdeasNowAction } from "@/app/actions/idea.actions"
+import { getMonitorTermsAction, addMonitorTermAction, deleteMonitorTermAction, updateMonitorTermIntentAction, getIdeasAction, discardIdeaAction, markIdeaUsedAction, generateIdeasNowAction, generateIdeaForThemeAction } from "@/app/actions/idea.actions"
 import { CONTENT_SKILLS, SKILL_LIST, ALL_SKILLS, type SkillId } from "@/config/content-skills"
 import type { Area, ContentPhase, Platform, ContentFormat } from "@/types"
 import { DatePicker } from "@/components/ui/DatePicker"
@@ -166,6 +166,26 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   async function handleDiscardIdea(id: string) {
     await discardIdeaAction(id)
     setIdeaFeed((p) => p.filter((i) => i.id !== id))
+  }
+
+  // Pesquisa 1 tema focado via pipeline completo (RSS + Claude + triangulação)
+  async function handleThemeIdea() {
+    if (!customIdeaInput.trim()) return
+    setCustomIdeaLoading(true)
+    setIdeaError(null)
+    try {
+      const res = await generateIdeaForThemeAction(customIdeaInput.trim())
+      if (res.success) {
+        const ideasRes = await getIdeasAction()
+        if (ideasRes.success) setIdeaFeed(ideasRes.data as any[])
+        setCustomIdeaInput("")
+      } else {
+        setIdeaError(res.error || "Erro ao pesquisar tema")
+      }
+    } catch (err: any) {
+      setIdeaError(`Erro: ${err?.message || "conexão falhou"}`)
+    }
+    setCustomIdeaLoading(false)
   }
 
   async function handleCustomIdea() {
@@ -783,36 +803,19 @@ export function ConteudoClient({ initialContents, areas }: Props) {
               <p className="text-[10px] text-cockpit-muted mt-2">O sistema busca tendências diariamente às 8h. O foco ajuda a triagem descartar matérias fora do seu tema.</p>
             </div>
 
-            {/* Custom idea input */}
+            {/* Pesquisar tema focado — pipeline completo de pesquisa pra 1 tema */}
             <div className="cockpit-card">
-              <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider mb-3">💡 Avaliar ideia específica</h3>
-              <p className="text-[10px] text-cockpit-muted mb-3">Selecione um tema monitorado para direcionar ou deixe livre para qualquer nicho.</p>
-
-              {/* Term selector */}
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                <button onClick={() => setCustomIdeaTerm("")}
-                  className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
-                    !customIdeaTerm ? "bg-accent/10 border-accent/30 text-accent" : "border-cockpit-border text-cockpit-muted hover:border-cockpit-text/30")}>
-                  Tema livre
-                </button>
-                {monitorTerms.filter((t: any) => t.isActive).map((t: any) => (
-                  <button key={t.id} onClick={() => setCustomIdeaTerm(t.term)}
-                    className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
-                      customIdeaTerm === t.term ? "bg-accent/10 border-accent/30 text-accent" : "border-cockpit-border text-cockpit-muted hover:border-cockpit-text/30")}>
-                    {t.term}
-                  </button>
-                ))}
-              </div>
+              <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider mb-1">🔍 Pesquisar tema específico</h3>
+              <p className="text-[10px] text-cockpit-muted mb-3">Escreva um tema ou palavra-chave e o sistema faz uma pesquisa focada (RSS + Claude + triangulação) gerando 1 ideia ancorada em fontes reais. Não adiciona aos termos monitorados.</p>
 
               <div className="flex items-start gap-2">
-                <textarea value={customIdeaInput} onChange={(e) => setCustomIdeaInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleCustomIdea() } }}
-                  placeholder={customIdeaTerm ? `Ideia dentro de "${customIdeaTerm}"... Ex: 'Comparar X com Y', 'Tutorial de Z'` : "Qualquer ideia... Ex: 'Receitas fit em 1 minuto', 'Review do novo iPhone'..."}
-                  rows={2}
-                  className="flex-1 px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30 resize-none" />
-                <button onClick={handleCustomIdea} disabled={!customIdeaInput.trim() || customIdeaLoading}
+                <input type="text" value={customIdeaInput} onChange={(e) => setCustomIdeaInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && customIdeaInput.trim() && !customIdeaLoading) handleThemeIdea() }}
+                  placeholder="Ex: 'NVIDIA GB200', 'Anthropic Opus 4.7', 'corrida eleitoral EUA 2026'..."
+                  className="flex-1 px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
+                <button onClick={handleThemeIdea} disabled={!customIdeaInput.trim() || customIdeaLoading}
                   className="flex items-center gap-1.5 px-4 py-2.5 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover disabled:opacity-50 flex-shrink-0">
-                  {customIdeaLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Avaliar
+                  {customIdeaLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} {customIdeaLoading ? "Pesquisando..." : "Pesquisar e gerar"}
                 </button>
               </div>
             </div>

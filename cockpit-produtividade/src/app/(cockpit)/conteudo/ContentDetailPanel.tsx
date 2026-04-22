@@ -1,15 +1,37 @@
 "use client"
 
-import { useCallback, useState, useTransition } from "react"
+import { useCallback, useEffect, useState, useTransition } from "react"
 import {
   X, Loader2, Archive, ChevronRight, ChevronLeft,
   Lightbulb, FileText, ExternalLink, Sparkles, RefreshCw,
   Scissors, Send, PenTool, ClipboardList, Mic,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { updateContentAction, advanceContentPhaseAction, archiveContentAction } from "@/app/actions/content.actions"
+import { updateContentAction, advanceContentPhaseAction, archiveContentAction, getContentReferencesAction } from "@/app/actions/content.actions"
 import { CONTENT_SKILLS, SKILL_LIST, type SkillId } from "@/config/content-skills"
 import type { Area, ContentPhase } from "@/types"
+
+type RefCard = {
+  id: string
+  title: string
+  url: string
+  host: string
+  publisher: string
+  language: string
+  summary: string
+  keyQuote: string | null
+  publishedAt: Date | null
+  sourceAuthority: string
+  relevanceScore: number
+}
+type ReferencesData = {
+  primary: RefCard | null
+  supporting: RefCard[]
+  ideaTitle?: string
+  ideaTerm?: string
+  viralScore?: number
+  hasInternationalCoverage?: boolean
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Content = any
@@ -53,6 +75,19 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
   })
 
   const [activeSection, setActiveSection] = useState<ElabSection>("pesquisa")
+
+  // Referências (IdeaFeed → NewsEvidence) — carrega uma vez por content
+  const [references, setReferences] = useState<ReferencesData | null>(null)
+  const [referencesLoading, setReferencesLoading] = useState(false)
+  useEffect(() => {
+    if (!content?.id) return
+    if (!content.ideaFeedId) { setReferences({ primary: null, supporting: [] }); return }
+    setReferencesLoading(true)
+    getContentReferencesAction(content.id).then((res) => {
+      if (res.success) setReferences(res.data as ReferencesData)
+      setReferencesLoading(false)
+    })
+  }, [content?.id, content?.ideaFeedId])
 
   // AI state — persists across sub-tab changes
   const [aiLoading, setAiLoading] = useState<string | null>(null)
@@ -107,13 +142,14 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
     return text.replace(/https?:\/\/[^\s\)]+/g, "").replace(/\n🔗 Fontes:[\s\S]*$/, "").trim()
   }
 
-  const isLongForm = content.skill === "LONG_VIDEO" || content.skill === "YOUTUBE_VIDEO"
-  const isShorts = content.skill === "YOUTUBE_SHORTS"
-  const durationPresets = isLongForm
-    ? [{ l: "8 min", v: 480 }, { l: "10 min", v: 600 }, { l: "15 min", v: 900 }, { l: "20 min", v: 1200 }, { l: "25 min", v: 1500 }, { l: "30 min", v: 1800 }]
-    : isShorts
-    ? [{ l: "15s", v: 15 }, { l: "30s", v: 30 }, { l: "45s", v: 45 }, { l: "60s", v: 60 }]
-    : [{ l: "30s", v: 30 }, { l: "60s", v: 60 }, { l: "1:30", v: 90 }, { l: "2:00", v: 120 }, { l: "2:30", v: 150 }, { l: "3:00", v: 180 }]
+  // Fallback quando skill não tem durationOptions definidas
+  const FALLBACK_SHORT = [
+    { seconds: 30, label: "30s", strategyName: "Quick", strategyBrief: "Punch curto", hookGuide: "", scriptGuide: "", titleGuide: "", descriptionGuide: "" },
+    { seconds: 60, label: "60s", strategyName: "Standard", strategyBrief: "Balanço", hookGuide: "", scriptGuide: "", titleGuide: "", descriptionGuide: "" },
+    { seconds: 90, label: "1:30", strategyName: "Story", strategyBrief: "Narrativa", hookGuide: "", scriptGuide: "", titleGuide: "", descriptionGuide: "" },
+  ]
+  const durationOptions = skill?.durationOptions ?? FALLBACK_SHORT
+  const currentDurationOption = durationOptions.find((d) => d.seconds === targetDuration) ?? null
 
   // ── Save ──────────────────────────────────────────────────────────────
 
@@ -150,7 +186,19 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
     try {
       const res = await fetch("/api/content/ai", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, skill: content.skill, phase: content.phase, title, hook, script, notes: notes + (extraContext ? `\nConsiderações: ${extraContext}` : ""), research, series: null, targetDuration }),
+        body: JSON.stringify({
+          action, skill: content.skill, phase: content.phase, title, hook, script,
+          notes: notes + (extraContext ? `\nConsiderações: ${extraContext}` : ""),
+          research, series: null, targetDuration,
+          durationStrategy: currentDurationOption ? {
+            strategyName: currentDurationOption.strategyName,
+            strategyBrief: currentDurationOption.strategyBrief,
+            hookGuide: currentDurationOption.hookGuide,
+            scriptGuide: currentDurationOption.scriptGuide,
+            titleGuide: currentDurationOption.titleGuide,
+            descriptionGuide: currentDurationOption.descriptionGuide,
+          } : null,
+        }),
       })
       if (res.ok) {
         const data = await res.json()
@@ -185,7 +233,7 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
       } else setAiResult("Erro. Verifique a ANTHROPIC_API_KEY.")
     } catch { setAiResult("Erro de conexão.") }
     setAiLoading(null); setAiConsideration("")
-  }, [content.skill, content.phase, title, hook, script, notes, research, targetDuration])
+  }, [content.skill, content.phase, title, hook, script, notes, research, targetDuration, currentDurationOption])
 
   async function selectOption(opt: any) {
     if (aiField === "hook") { setHook(opt.text); await saveNow({ hook: opt.text }) }
@@ -424,13 +472,24 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
 
             {/* ═══ ELABORAÇÃO ═══ */}
             {content.phase === "ELABORATION" && (<>
-              {/* Duration */}
+              {/* Duration + Strategy (skill dita estratégia por duração) */}
               <div>
-                <p className="text-xs font-medium text-cockpit-muted mb-2">Duração estimada</p>
-                <div className="flex flex-wrap gap-2">{durationPresets.map((p) => (
-                  <button key={p.v} onClick={() => { setTargetDuration(p.v); save({ targetDuration: p.v }) }}
-                    className={cn("px-3 py-1.5 rounded-xl text-xs font-medium border transition-all", targetDuration === p.v ? "bg-accent text-black border-accent" : "border-cockpit-border text-cockpit-muted hover:border-accent/30")}>{p.l}</button>
+                <p className="text-xs font-medium text-cockpit-muted mb-2">Duração & estratégia</p>
+                <div className="grid grid-cols-3 gap-2">{durationOptions.map((p) => (
+                  <button key={p.seconds} onClick={() => { setTargetDuration(p.seconds); save({ targetDuration: p.seconds }) }}
+                    className={cn("p-3 rounded-xl text-left border transition-all", targetDuration === p.seconds ? "bg-accent/10 text-cockpit-text border-accent shadow-sm" : "border-cockpit-border text-cockpit-muted hover:border-accent/30")}>
+                    <div className="flex items-baseline justify-between mb-1">
+                      <span className={cn("text-sm font-bold", targetDuration === p.seconds ? "text-accent" : "text-cockpit-text")}>{p.label}</span>
+                      <span className="text-[10px] font-medium opacity-70">{p.strategyName}</span>
+                    </div>
+                    <p className="text-[10px] leading-snug opacity-70">{p.strategyBrief}</p>
+                  </button>
                 ))}</div>
+                {currentDurationOption && (
+                  <div className="mt-2 p-2.5 bg-accent/5 border border-accent/20 rounded-lg text-[11px] text-cockpit-muted">
+                    <span className="font-semibold text-accent">{currentDurationOption.strategyName}</span> · {currentDurationOption.strategyBrief}
+                  </div>
+                )}
               </div>
 
               {/* Sub-sections */}
@@ -449,9 +508,10 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
               </div>
 
               {activeSection === "pesquisa" && (<>
+                <ReferencesBlock data={references} loading={referencesLoading} />
                 <div className="flex flex-wrap gap-2"><AiBtn action="deep_research" label="Pesquisar mais sobre o tema" /></div>
                 <AiPanel acceptField="research" />
-                <Field label="Pesquisa & Referências" value={research} onChange={setResearch} field="research" placeholder="Links, dados, fontes, inspirações..." rows={10} />
+                <Field label="Notas de pesquisa adicionais" value={research} onChange={setResearch} field="research" placeholder="Links extras, dados, inspirações (fora das fontes da pesquisa)..." rows={8} />
               </>)}
 
               {activeSection === "hook" && (<>
@@ -569,10 +629,13 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
                 </details>
               )}
 
-              {/* Research (colapsável) */}
+              {/* Fontes (clicáveis, do IdeaFeed → NewsEvidence) */}
+              <ReferencesBlock data={references} loading={referencesLoading} />
+
+              {/* Research livre do usuário (colapsável, só texto adicional que ele escreveu) */}
               {research && (
                 <details className="rounded-xl border border-cockpit-border overflow-hidden">
-                  <summary className="px-4 py-3 text-xs font-medium text-cockpit-muted cursor-pointer hover:bg-cockpit-surface-hover">📚 Pesquisa & Referências</summary>
+                  <summary className="px-4 py-3 text-xs font-medium text-cockpit-muted cursor-pointer hover:bg-cockpit-surface-hover">📝 Notas de pesquisa adicionais</summary>
                   <div className="px-4 py-3 border-t border-cockpit-border text-xs text-cockpit-muted whitespace-pre-wrap max-h-48 overflow-y-auto">{research}</div>
                 </details>
               )}
@@ -652,5 +715,95 @@ export function ContentDetailPanel({ content, areas, onClose, onUpdate, onArchiv
         </div>
       </div>
     </>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ReferencesBlock — cards clicáveis com fontes (primária + apoio)
+// Usa IdeaFeed → NewsEvidence via getContentReferencesAction
+// ═══════════════════════════════════════════════════════════════════════════
+
+function ReferencesBlock({ data, loading, compact = false }: { data: ReferencesData | null; loading: boolean; compact?: boolean }) {
+  if (loading) {
+    return (
+      <div className="p-4 border border-cockpit-border rounded-xl bg-cockpit-bg">
+        <div className="flex items-center gap-2 text-xs text-cockpit-muted"><Loader2 size={12} className="animate-spin" /> Carregando fontes…</div>
+      </div>
+    )
+  }
+  if (!data || (!data.primary && data.supporting.length === 0)) return null
+
+  const langLabel = (l: string) => l === "pt-BR" ? "🇧🇷 PT" : l === "en" ? "🇺🇸 EN" : l === "es" ? "🇪🇸 ES" : l
+  const tierBadge = (t: string) => {
+    if (t === "TIER_1") return { text: "Tier 1", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" }
+    if (t === "TIER_2") return { text: "Tier 2", cls: "bg-blue-500/15 text-blue-400 border-blue-500/30" }
+    if (t === "BLOG") return { text: "Blog", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" }
+    if (t === "AGGREGATOR") return { text: "Agreg.", cls: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30" }
+    return { text: "—", cls: "bg-zinc-500/15 text-zinc-500 border-zinc-500/30" }
+  }
+
+  const Card = ({ ref: r, isPrimary }: { ref: RefCard; isPrimary?: boolean }) => {
+    const tier = tierBadge(r.sourceAuthority)
+    return (
+      <a href={r.url} target="_blank" rel="noopener noreferrer"
+        className={cn(
+          "block p-3 rounded-xl border transition-all group",
+          isPrimary
+            ? "border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 hover:border-amber-500/50"
+            : "border-cockpit-border bg-cockpit-bg hover:border-accent/40 hover:bg-cockpit-surface-hover"
+        )}>
+        <div className="flex items-start justify-between gap-2 mb-1.5">
+          <div className="flex items-center gap-1.5 text-[10px]">
+            <span className={cn("px-1.5 py-0.5 rounded border font-semibold", tier.cls)}>{tier.text}</span>
+            <span className="text-cockpit-muted">{langLabel(r.language)}</span>
+            <span className="text-cockpit-muted">· {r.host}</span>
+          </div>
+          <ExternalLink size={11} className="text-cockpit-muted group-hover:text-accent flex-shrink-0" />
+        </div>
+        <p className="text-xs font-semibold text-cockpit-text leading-snug mb-1 group-hover:text-accent transition-colors">
+          {r.title}
+        </p>
+        {!compact && r.summary && (
+          <p className="text-[11px] text-cockpit-muted line-clamp-2 leading-relaxed">{r.summary}</p>
+        )}
+        {!compact && r.keyQuote && (
+          <p className="text-[10px] italic text-cockpit-muted mt-1.5 pl-2 border-l-2 border-cockpit-border line-clamp-2">
+            &ldquo;{r.keyQuote}&rdquo;
+          </p>
+        )}
+      </a>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-cockpit-border overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-cockpit-border bg-cockpit-surface/50 flex items-center justify-between">
+        <p className="text-xs font-semibold text-cockpit-text flex items-center gap-1.5">
+          📚 Fontes da pesquisa
+          <span className="text-[10px] text-cockpit-muted font-normal">
+            · {(data.primary ? 1 : 0) + data.supporting.length} link{((data.primary ? 1 : 0) + data.supporting.length) > 1 ? "s" : ""}
+          </span>
+        </p>
+        {data.viralScore != null && (
+          <span className="text-[10px] text-cockpit-muted">viral {data.viralScore}/100 {data.hasInternationalCoverage ? "· 🌎" : ""}</span>
+        )}
+      </div>
+      <div className="p-3 space-y-2">
+        {data.primary && (
+          <div>
+            <p className="text-[9px] uppercase tracking-wider text-amber-500 font-semibold mb-1.5">Primária</p>
+            <Card ref={data.primary} isPrimary />
+          </div>
+        )}
+        {data.supporting.length > 0 && (
+          <div>
+            <p className="text-[9px] uppercase tracking-wider text-cockpit-muted font-semibold mb-1.5 mt-2">Apoio ({data.supporting.length})</p>
+            <div className="space-y-1.5">
+              {data.supporting.map((r) => <Card key={r.id} ref={r} />)}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }

@@ -30,6 +30,17 @@ export interface SkillSourceRef {
   description: string
 }
 
+export interface DurationOption {
+  seconds: number
+  label: string              // "30s", "60s", "8 min"
+  strategyName: string       // "Quick Hit", "Deep Dive"
+  strategyBrief: string      // 1 linha explicando a estratégia
+  scriptGuide: string        // como estruturar o roteiro pra essa duração
+  titleGuide: string         // fórmula do título
+  descriptionGuide: string   // fórmula da caption/descrição
+  hookGuide: string          // abertura/primeiros segundos
+}
+
 export interface ContentSkill {
   id: SkillId
   label: string
@@ -42,6 +53,7 @@ export interface ContentSkill {
   kpis: { label: string; target: string; why: string }[]
   scriptTemplates: { name: string; structure: string[] }[]
   sources: SkillSourceRef[]
+  durationOptions?: DurationOption[]
   lastUpdated: string
 }
 
@@ -975,6 +987,35 @@ const INSTAGRAM_REELS: ContentSkill = {
     { title: "Instagram Reels Algorithm 2026 — EvergreenFeed", url: "https://www.evergreenfeed.com/blog/instagram-reels-algorithm/", description: "Sends/DM como principal sinal" },
     { title: "Instagram Algorithm — Buffer", url: "https://buffer.com/resources/instagram-algorithms/", description: "Guia completo do algoritmo" },
   ],
+  durationOptions: [
+    {
+      seconds: 30, label: "30s",
+      strategyName: "Teaser Viral",
+      strategyBrief: "Um fato bombástico + gancho que faz salvar. Sem contexto, só o punch.",
+      hookGuide: "Visual impactante nos 1-2s + afirmação chocante na legenda (ex: 'ninguém te contou isso').",
+      scriptGuide: "Uma mensagem central. Sem intro. 3 atos compactos: setup (5s) → revelação (15s) → CTA (5-10s). Cada frase tem que pagar aluguel.",
+      titleGuide: "Curiosity gap em <40 chars. Pergunta aberta ou afirmação polêmica. Ex: 'Por que NINGUÉM fala disso?'",
+      descriptionGuide: "Caption de 1 linha + 3-5 hashtags nicho. NÃO repita o que está no vídeo. Inclua CTA pra DM ou save.",
+    },
+    {
+      seconds: 60, label: "60s",
+      strategyName: "Fato + Contexto",
+      strategyBrief: "Tempo pra explicar o fato + impacto prático. Sweet spot de Reels educacionais.",
+      hookGuide: "Pergunta provocadora nos 3s. Visual + texto overlay simultâneos. Mantém suspense até os 15s.",
+      scriptGuide: "Estrutura 3 atos: HOOK (3s) → CONTEXTO (15s) → DESENVOLVIMENTO (30s) → CTA (10s). Pattern interrupt a cada 5s (corte, zoom, texto). Open loop: abra algo no início que só resolve no final.",
+      titleGuide: "Curiosity + specificity. Ex: 'Como X fez Y em 48h'. <60 chars. Evite clickbait óbvio.",
+      descriptionGuide: "Caption 2-3 linhas com o 'porquê importa'. CTA pra DM + 5-7 hashtags específicas do nicho.",
+    },
+    {
+      seconds: 90, label: "90s",
+      strategyName: "Mini História",
+      strategyBrief: "Storytelling compacto com reviravolta. Educação com emoção.",
+      hookGuide: "Conflito ou dúvida aparente nos 3s ('Eu pensei que X, mas...'). Pessoal antes de profissional.",
+      scriptGuide: "5 batidas: HOOK → SETUP → CONFLITO → CLIMAX → RESOLUÇÃO. Frase-chave aos 60s tem que gerar save. CTA pra seguir só depois da payoff emocional.",
+      titleGuide: "Narrativa em 1 linha. 'A história de X que ninguém conta' ou 'O momento em que Y virou Z'.",
+      descriptionGuide: "Caption conta a história em 4-5 linhas (continua ou contextualiza). CTA: 'salva pra quando você passar por isso'. Hashtags: 7-10 do nicho.",
+    },
+  ],
   lastUpdated: "2026-04-18",
 }
 
@@ -1021,6 +1062,35 @@ const YOUTUBE_SHORTS: ContentSkill = {
     { title: "YouTube Shorts Best Practices 2026 — JoinBrands", url: "https://joinbrands.com/blog/youtube-shorts-best-practices/", description: "10 dicas para maximizar views" },
     { title: "YouTube Algorithm 2026 — OutlierKit", url: "https://outlierkit.com/resources/youtube-algorithm-updates/", description: "Shorts desacoplado, satisfaction-weighted" },
   ],
+  durationOptions: [
+    {
+      seconds: 30, label: "30s",
+      strategyName: "Snap Insight",
+      strategyBrief: "1 insight + loop que faz replay. Máxima densidade, zero enrolação.",
+      hookGuide: "Pergunta ou fato nos 2s. Frame final deve conectar com o primeiro (loop = replay = watch time).",
+      scriptGuide: "3 batidas: PERGUNTA (3s) → RESPOSTA (22s) → LOOP (5s). Final aponta de volta pro começo ('... é por isso que voltei'). Pattern interrupt a cada 4s.",
+      titleGuide: "Keyword forte no início (YouTube SEO). <50 chars. Ex: 'ChatGPT: o truque que 99% não conhece'.",
+      descriptionGuide: "1ª linha: keyword principal + promessa. 2ª linha: CTA pro canal longo. Inclua #shorts + 3 tags de nicho.",
+    },
+    {
+      seconds: 45, label: "45s",
+      strategyName: "Explicação Clara",
+      strategyBrief: "Tempo pra 2-3 pontos conectados. Curiosity stacking explícito.",
+      hookGuide: "Setup nos 3s ('Você sabia que X?') + promessa nos próximos 5s ('em 40s eu te explico').",
+      scriptGuide: "4 batidas: HOOK → PONTO 1 → PONTO 2 (curiosity gap) → PAYOFF/CTA. Cada ponto de 10s. Open loop: deixa curiosidade no ponto 1 que resolve no ponto 2.",
+      titleGuide: "Número + specificity. Ex: '3 coisas que X mudou em Y'. <55 chars.",
+      descriptionGuide: "2 linhas: resumo + CTA pro vídeo longo no canal. #shorts + 4-5 tags.",
+    },
+    {
+      seconds: 60, label: "60s",
+      strategyName: "Mini Tutorial",
+      strategyBrief: "Passo-a-passo útil com CTA pro canal. Máximo que o Shorts aceita.",
+      hookGuide: "Problema específico nos 3s ('Se você faz X, tá perdendo Y'). Visual + fala sincronizados.",
+      scriptGuide: "5 passos numerados (10-12s cada). Texto overlay grande. CTA aos 55s pro vídeo longo. Loop opcional mas recomendado.",
+      titleGuide: "How-to ou número. 'Como X em 60s' ou '5 passos pra Y'. <55 chars.",
+      descriptionGuide: "Lista dos passos em bullet. Link pro vídeo completo no canal. Keywords pesadas (YouTube é busca).",
+    },
+  ],
   lastUpdated: "2026-04-18",
 }
 
@@ -1051,6 +1121,35 @@ const YOUTUBE_VIDEO: ContentSkill = {
   ],
   scriptTemplates: LONG_VIDEO.scriptTemplates,
   sources: LONG_VIDEO.sources,
+  durationOptions: [
+    {
+      seconds: 8 * 60, label: "8 min",
+      strategyName: "Explainer Focado",
+      strategyBrief: "1 tema, profundidade média. Ideal pra trends e temas do dia.",
+      hookGuide: "Cold open 15s: problema ou promessa + por que isso importa AGORA. Sem intro de canal nos primeiros 20s.",
+      scriptGuide: "Estrutura 4 blocos: HOOK (15s) → CONTEXTO (1min) → 2 PONTOS PRINCIPAIS (5min) → CONCLUSÃO + CTA (1min). Open loops a cada 90s. Pattern interrupts: corte, B-roll, gráfico. End screen nos últimos 20s apontando pra vídeo relacionado.",
+      titleGuide: "Curiosity gap + keyword principal nos 30-55 chars. 'Por que X está Y' ou 'O erro que Z'. Evite números round (usa 7, 13 em vez de 10).",
+      descriptionGuide: "1ª linha: promessa + keyword (SEO). Próximas 2: resumo dos pontos. Timestamps no formato 0:00 Hook, 1:00 Contexto. Links pra fontes. 5-8 hashtags.",
+    },
+    {
+      seconds: 15 * 60, label: "15 min",
+      strategyName: "Análise Profunda",
+      strategyBrief: "Narrativa em 3 atos com capítulos. Tema denso que vale monetização premium.",
+      hookGuide: "Cold open de 30-45s: frase-tese + stakes ('o que está em jogo'). Depois intro curta de 5s (canal + do que trata). Curiosity gap pesado.",
+      scriptGuide: "3 atos com capítulos: ATO 1 SETUP (3min) → ATO 2 CONFLITO/INVESTIGAÇÃO (8min, 2-3 capítulos) → ATO 3 RESOLUÇÃO (3min) + CTA (1min). Open loops que só resolvem no ato 3. Pattern interrupt: B-roll, citação de specialist, dado numérico. Capítulos de 3-4min com timestamps.",
+      titleGuide: "Thesis clara + alta curiosidade. 'A verdade sobre X' ou 'Como Y está mudando Z'. 40-60 chars.",
+      descriptionGuide: "1ª linha: thesis/promessa + keyword. Timestamps obrigatórios. Resumo em 4-5 linhas. Fontes/links numerados. Hashtags 6-8. CTA pra comunidade/Patreon/newsletter.",
+    },
+    {
+      seconds: 25 * 60, label: "25 min",
+      strategyName: "Deep Dive / Investigação",
+      strategyBrief: "Conteúdo de autoridade. Um assunto esgotado com pesquisa original, entrevistas, dados.",
+      hookGuide: "Cold open 60s com múltiplos stakes. Montagem de clipes/teasers das partes mais interessantes. Promessa específica: 'ao final você vai entender X'. Pattern interrupt imediato.",
+      scriptGuide: "6-8 capítulos de 3-4min cada: HOOK → CONTEXTO HISTÓRICO → STATUS QUO → VIRADA/PESQUISA → CONTRA-ARGUMENTO → SÍNTESE → IMPLICAÇÕES → CTA. Entre capítulos, pattern interrupts longos (B-roll cinematográfico, citações, dados). Reviews feitos pra long-tail search. End screen robusto.",
+      titleGuide: "Tese contrarian + specificity. Evite clickbait, valorize autoridade. 'O que ninguém te contou sobre X' ou 'Investigação: por que Y'.",
+      descriptionGuide: "1ª linha: tese. 2ª linha: 'Nesta investigação:'. Timestamps detalhados. Fontes acadêmicas/jornalísticas listadas. Descrição longa (300+ palavras) pra SEO. CTA: inscrever + comunidade. Hashtags 8-10 mix nicho+amplo.",
+    },
+  ],
   lastUpdated: "2026-04-18",
 }
 
@@ -1100,6 +1199,35 @@ const TIKTOK_VIDEO: ContentSkill = {
   sources: [
     { title: "Short-Form Video Statistics 2026 — AutoFaceless", url: "https://autofaceless.ai/blog/short-form-video-statistics-2026", description: "Dados de performance por plataforma" },
     { title: "Short-Form Video Trends 2026 — ShortSync", url: "https://www.shortsync.app/resources/short-form-video-trends-2026", description: "Tendências e curiosity stacking" },
+  ],
+  durationOptions: [
+    {
+      seconds: 30, label: "30s",
+      strategyName: "Trend Native",
+      strategyBrief: "Entra em trend de áudio/formato, 1 ponto rápido. Autenticidade > produção.",
+      hookGuide: "1s visual + 2s fala. Tom casual, como se tivesse começando no meio da conversa. Use trending audio/sound nos 24-72h do peak.",
+      scriptGuide: "1 ideia, 1 gancho. 3 batidas: HOOK (3s) → DESENVOLVIMENTO (22s) → PUNCHLINE/CTA (5s). Evite tom 'produzido'. Use POV, duet ou stitch quando faz sentido.",
+      titleGuide: "Sem título (TikTok não tem). A caption faz o papel: punchline + hashtags de nicho.",
+      descriptionGuide: "Caption 1 linha + 3-5 hashtags (evite #fyp #viral, use nicho). Emoji estratégico. Pergunta que pede resposta nos comentários.",
+    },
+    {
+      seconds: 60, label: "60s",
+      strategyName: "Curiosity Stacking",
+      strategyBrief: "Sweet spot do FYP. Múltiplos mini-gaps de curiosidade. Target 4M+ views.",
+      hookGuide: "Pergunta ou afirmação polêmica nos 3s. Cria o primeiro gap. Visual + texto overlay grande.",
+      scriptGuide: "HOOK (3s) → GAP 1 (15s, resolve) → GAP 2 (15s, resolve) → GAP 3 (15s) → PAYOFF + CTA (10s). Cada gap fechado abre outro. Frase-chave na metade gera save.",
+      titleGuide: "Caption: pergunta forte. 'Você sabia que X?' ou afirmação que força discordância. Força comentários.",
+      descriptionGuide: "Caption 2-3 linhas com mais contexto. 5-7 hashtags específicas. Mencione o trending audio se usado.",
+    },
+    {
+      seconds: 90, label: "90s",
+      strategyName: "Narrative POV",
+      strategyBrief: "Story-driven. POV, story time ou before/after. Completion alta = distribuição alta.",
+      hookGuide: "Emoção nos 2s ('Gente, eu tô assustado com isso'). Primeira pessoa, autêntico. Roteiro NÃO pode parecer roteirizado.",
+      scriptGuide: "Arco narrativo completo em 90s: SETUP (10s) → DESENVOLVIMENTO (40s) → CLIMAX (20s) → RESOLUÇÃO (15s) → CTA (5s). Fala como pessoa, não como marca. Pattern interrupt por emoção (tom, expressão), não por edição.",
+      titleGuide: "Caption: início da história. 'Eu estava X quando Y...'. Deixa em aberto, força entrar pra descobrir.",
+      descriptionGuide: "Caption conta parte da história (4-6 linhas). Convida a comentar o próprio caso. Hashtags 6-8 mix POV + nicho.",
+    },
   ],
   lastUpdated: "2026-04-18",
 }
