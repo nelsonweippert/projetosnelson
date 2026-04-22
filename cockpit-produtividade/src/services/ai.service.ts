@@ -1225,7 +1225,7 @@ export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Pro
 
 // ─── Usage tracking (model-aware) ──────────────────────────────────────
 
-async function trackUsage(
+export async function trackUsage(
   model: ModelId,
   action: string,
   inputTokens: number,
@@ -1252,8 +1252,6 @@ async function trackUsage(
     })
   } catch {}
 }
-
-export { trackUsage }
 
 export async function getAiInsights(userId: string) {
   return db.aiInsight.findMany({

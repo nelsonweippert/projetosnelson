@@ -1,10 +1,17 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { Loader2, Search, X, Plus, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { discoverSourcesForTermAction, updateTermSourcesAction } from "@/app/actions/idea.actions"
 
+export type TermSourceScores = {
+  authority: number
+  specialization: number
+  frequency: number
+  independence: number
+  languageFit: number
+}
 export type TermSource = {
   host: string
   name: string
@@ -12,6 +19,8 @@ export type TermSource = {
   language: "pt-BR" | "en" | "es"
   note?: string
   isActive: boolean
+  scores?: TermSourceScores
+  aggregateScore?: number
 }
 
 function tierBadge(tier: TermSource["tier"]) {
@@ -32,21 +41,43 @@ interface Props {
 
 export function TermSourcesManager({ termId, sources, onSourcesChange }: Props) {
   const [discovering, setDiscovering] = useState(false)
+  const [discoverStartedAt, setDiscoverStartedAt] = useState<number | null>(null)
+  const [discoverElapsed, setDiscoverElapsed] = useState(0)
+  const [lastResult, setLastResult] = useState<{ found: number; rejected: number; durationMs: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [addingHost, setAddingHost] = useState("")
   const [, startTransition] = useTransition()
 
   const activeCount = sources.filter((s) => s.isActive).length
 
+  // Timer durante descoberta
+  useEffect(() => {
+    if (!discoverStartedAt) return
+    const interval = setInterval(() => {
+      setDiscoverElapsed(Math.floor((Date.now() - discoverStartedAt) / 1000))
+    }, 500)
+    return () => clearInterval(interval)
+  }, [discoverStartedAt])
+
   async function handleDiscover() {
     setDiscovering(true)
+    setDiscoverStartedAt(Date.now())
+    setDiscoverElapsed(0)
     setError(null)
+    setLastResult(null)
     try {
       const res = await discoverSourcesForTermAction(termId)
       if (res.success) {
-        const updated = res.data as { sources: TermSource[] }
+        const updated = res.data as { sources: TermSource[]; _discovery?: { found: number; rejected: { host: string; reason: string }[]; usage: { totalDurationMs: number } } }
         const newSources = (Array.isArray(updated?.sources) ? updated.sources : []) as TermSource[]
         onSourcesChange(newSources)
+        if (updated._discovery) {
+          setLastResult({
+            found: updated._discovery.found,
+            rejected: updated._discovery.rejected.length,
+            durationMs: updated._discovery.usage.totalDurationMs,
+          })
+        }
       } else {
         setError(res.error || "Erro ao descobrir fontes")
       }
@@ -54,6 +85,7 @@ export function TermSourcesManager({ termId, sources, onSourcesChange }: Props) 
       setError(err instanceof Error ? err.message : "Erro inesperado")
     } finally {
       setDiscovering(false)
+      setDiscoverStartedAt(null)
     }
   }
 
@@ -117,10 +149,66 @@ export function TermSourcesManager({ termId, sources, onSourcesChange }: Props) 
         </div>
       )}
 
+      {/* Progress dos 3 estágios durante descoberta */}
+      {discovering && (() => {
+        const stages = [
+          { id: "decomp", label: "Decompondo tema", detail: "subtemas, jargão, perfis-alvo, queries planejadas", maxSec: 20 },
+          { id: "discover", label: "Descoberta multi-estratégia", detail: "executando 6-10 queries web_search", maxSec: 70 },
+          { id: "validate", label: "Validação + ranking", detail: "site: por candidato, score em 5 dimensões", maxSec: 140 },
+        ]
+        const idx = stages.findIndex((s) => discoverElapsed < s.maxSec)
+        const effectiveIdx = idx === -1 ? stages.length - 1 : idx
+        return (
+          <div className="p-3 bg-cockpit-bg border border-accent/20 rounded-lg space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Loader2 size={12} className="animate-spin text-accent" />
+                <span className="text-[11px] font-semibold text-cockpit-text">{stages[effectiveIdx].label}</span>
+              </div>
+              <span className="text-[11px] text-cockpit-muted tabular-nums">{discoverElapsed}s</span>
+            </div>
+            <p className="text-[10px] text-cockpit-muted">{stages[effectiveIdx].detail}</p>
+            <div className="flex items-center gap-1">
+              {stages.map((s, i) => {
+                const done = i < effectiveIdx
+                const current = i === effectiveIdx
+                const prevMax = i === 0 ? 0 : stages[i - 1].maxSec
+                const pct = current
+                  ? Math.min(100, ((discoverElapsed - prevMax) / (s.maxSec - prevMax)) * 100)
+                  : done ? 100 : 0
+                return (
+                  <div key={s.id} className="flex-1 h-1 bg-cockpit-border-light rounded-full overflow-hidden">
+                    <div className={cn(
+                      "h-full rounded-full transition-all",
+                      done ? "bg-emerald-500" : current ? "bg-accent" : "bg-cockpit-border"
+                    )} style={{ width: `${pct}%` }} />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Resultado da última descoberta */}
+      {lastResult && !discovering && (
+        <div className="px-2 py-1 bg-emerald-500/5 border border-emerald-500/15 rounded-lg text-[10px] text-emerald-500">
+          ✓ {lastResult.found} fontes encontradas · {lastResult.rejected} rejeitadas · {(lastResult.durationMs / 1000).toFixed(0)}s
+        </div>
+      )}
+
       {sources.length > 0 && (
-        <div className="space-y-1 max-h-72 overflow-y-auto">
+        <div className="space-y-1 max-h-96 overflow-y-auto">
           {sources.map((s) => {
             const tier = tierBadge(s.tier)
+            const scoreTone =
+              s.aggregateScore == null ? "" :
+              s.aggregateScore >= 8 ? "text-emerald-500" :
+              s.aggregateScore >= 6 ? "text-accent" :
+              "text-amber-500"
+            const scoresTooltip = s.scores
+              ? `Autoridade: ${s.scores.authority} · Especialização: ${s.scores.specialization} · Frequência: ${s.scores.frequency} · Independência: ${s.scores.independence} · Idioma: ${s.scores.languageFit}`
+              : undefined
             return (
               <div key={s.host} className={cn(
                 "flex items-center gap-2 px-2 py-1.5 rounded-lg border text-[11px]",
@@ -136,12 +224,18 @@ export function TermSourcesManager({ termId, sources, onSourcesChange }: Props) 
                 </button>
                 <span className={cn("px-1.5 py-0.5 text-[9px] font-bold border rounded", tier.cls)}>{tier.text}</span>
                 <span className="text-[11px]">{langFlag(s.language)}</span>
+                {s.aggregateScore != null && (
+                  <span title={scoresTooltip} className={cn("text-[10px] font-bold tabular-nums shrink-0 cursor-help", scoreTone)}>
+                    {s.aggregateScore.toFixed(1)}
+                  </span>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="font-semibold text-cockpit-text truncate">{s.name}</span>
+                    <a href={`https://${s.host}`} target="_blank" rel="noopener noreferrer"
+                      className="font-semibold text-cockpit-text truncate hover:text-accent hover:underline">{s.name}</a>
                     <span className="text-[9px] text-cockpit-muted truncate">{s.host}</span>
                   </div>
-                  {s.note && <p className="text-[10px] text-cockpit-muted truncate">{s.note}</p>}
+                  {s.note && <p className="text-[10px] text-cockpit-muted truncate" title={s.note}>{s.note}</p>}
                 </div>
                 <button onClick={() => handleRemove(s.host)} title="Remover"
                   className="p-0.5 text-cockpit-muted hover:text-red-400 rounded shrink-0">

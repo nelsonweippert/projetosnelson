@@ -74,9 +74,10 @@ export async function discoverSourcesForTermAction(termId: string): Promise<Acti
     if (!term) return { success: false, error: "Termo não encontrado" }
 
     const { discoverSourcesForTerm } = await import("@/services/source-discovery.service")
-    const { sources, usage } = await discoverSourcesForTerm({
+    const { sources, rejected, usage } = await discoverSourcesForTerm({
       term: term.term,
       intent: term.intent,
+      userId,
     })
 
     // Merge com fontes existentes: preserva fontes manuais (isActive flag) e adiciona novas.
@@ -100,9 +101,20 @@ export async function discoverSourcesForTermAction(termId: string): Promise<Acti
       },
     })
 
-    console.log(`[discoverSources] term="${term.term}" found=${sources.length} merged=${merged.length} searches=${usage.searchesUsed}`)
+    console.log(`[discoverSources] term="${term.term}" found=${sources.length} merged=${merged.length} rejected=${rejected.length} searches=${usage.searchesUsed} duration=${usage.totalDurationMs}ms`)
     revalidatePath("/conteudo")
-    return { success: true, data: updated }
+    return {
+      success: true,
+      data: {
+        ...updated,
+        _discovery: {
+          found: sources.length,
+          merged: merged.length,
+          rejected,
+          usage,
+        },
+      },
+    }
   } catch (err) {
     console.error("[discoverSources]", err)
     const msg = err instanceof Error ? err.message : "Erro ao descobrir fontes"
