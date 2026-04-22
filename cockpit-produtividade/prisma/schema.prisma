@@ -473,6 +473,8 @@ model IdeaFeed {
   viralScore           Int?       // 0-100 de publishers × idiomas × recência
   publisherHosts       String[] @default([]) // hosts únicos (primário + apoios)
   hasInternationalCoverage Boolean @default(false)
+  // Encaixe por plataforma (0-100 cada): pra priorizar qual formato usar
+  platformFit          Json?      // { reels: number, shorts: number, long: number, tiktok: number }
   isUsed        Boolean   @default(false)
   isDiscarded   Boolean   @default(false)
   createdAt     DateTime  @default(now())

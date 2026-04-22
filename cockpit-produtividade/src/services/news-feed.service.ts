@@ -85,7 +85,7 @@ export async function fetchAllFeeds(term: string): Promise<FeedItem[]> {
 }
 
 /** Remove duplicatas por similaridade de título (primeiros 50 chars normalizados). */
-function titleKey(t: string): string {
+export function titleKey(t: string): string {
   return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim().slice(0, 60)
 }
 
@@ -111,6 +111,50 @@ export function filterAndSort(items: FeedItem[], hoursWindow = 72): FeedItem[] {
       const tb = b.pubDate?.getTime() ?? 0
       return tb - ta
     })
+}
+
+/**
+ * Resolve redirect do Google News → URL real do publisher.
+ * Usa google-news-url-decoder que decodifica o protobuf base64 embutido na URL.
+ * Em caso de falha, retorna URL original.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _decoderInstance: any = null
+async function getDecoder() {
+  if (_decoderInstance) return _decoderInstance
+  // @ts-expect-error pacote CommonJS sem types
+  const mod = await import("google-news-url-decoder")
+  _decoderInstance = new mod.GoogleDecoder()
+  return _decoderInstance
+}
+
+export async function resolveGoogleNewsUrl(url: string): Promise<string> {
+  if (!url.includes("news.google.com")) return url
+  try {
+    const decoder = await getDecoder()
+    const result = await decoder.decode(url)
+    if (result && result.status && result.decoded_url && !result.decoded_url.includes("news.google.com")) {
+      return result.decoded_url
+    }
+    return url
+  } catch {
+    return url
+  }
+}
+
+/** Resolve lista em paralelo com concurrency cap. */
+export async function resolveGoogleNewsUrls(urls: string[], concurrency = 6): Promise<string[]> {
+  const out = new Array<string>(urls.length)
+  let cursor = 0
+  async function worker() {
+    while (true) {
+      const i = cursor++
+      if (i >= urls.length) return
+      out[i] = await resolveGoogleNewsUrl(urls[i])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, urls.length) }, worker))
+  return out
 }
 
 /** Fluxo completo: todos termos → dedupe global → filtrado → top N por termo. */

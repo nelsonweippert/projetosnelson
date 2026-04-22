@@ -18,9 +18,14 @@ const MODELS = {
 } as const
 type ModelId = keyof typeof MODELS
 
-// Default Sonnet 4.6 pro pipeline de ideias (mais barato, qualidade excelente pra síntese/extração).
-// Override via env IDEAS_MODEL se quiser Opus 4.7.
-const IDEAS_MODEL: ModelId = (process.env.IDEAS_MODEL as ModelId) || "claude-sonnet-4-6"
+// Mix de modelos por fase: Haiku pra classificação/extração (80% dos tokens), Sonnet só pra narrativa.
+// Override via env pra teste.
+const DISCOVERY_MODEL: ModelId = (process.env.DISCOVERY_MODEL as ModelId) || "claude-haiku-4-5"
+const TRIAGE_MODEL: ModelId = (process.env.TRIAGE_MODEL as ModelId) || "claude-haiku-4-5"
+const DEEP_MODEL: ModelId = (process.env.DEEP_MODEL as ModelId) || "claude-haiku-4-5"
+const NARRATIVE_MODEL: ModelId = (process.env.NARRATIVE_MODEL as ModelId) || "claude-sonnet-4-6"
+// Retrocompat: código antigo que usa IDEAS_MODEL continua funcionando (narrative é o "coração").
+const IDEAS_MODEL: ModelId = NARRATIVE_MODEL
 const REVIEW_MODEL: ModelId = "claude-sonnet-4-6"
 
 export async function generateWeeklyReview(userId: string): Promise<string> {
@@ -135,7 +140,7 @@ export async function generateContentSuggestion(systemPrompt: string, userPrompt
 //   Stage 4 (Claude):  narrative — constrói ideias sobre os grupos
 // ═══════════════════════════════════════════════════════════════════════
 
-import { discoverCandidates, type FeedItem } from "./news-feed.service"
+import { discoverCandidates, resolveGoogleNewsUrls, titleKey, type FeedItem } from "./news-feed.service"
 
 const BLOCKED_DOMAINS = [
   "pinterest.com", "pinterest.com.br",
@@ -227,69 +232,88 @@ async function runDiscoveryPhase(opts: {
       Object.entries(termIntents).map(([t, i]) => `- "${t}": ${i}`).join("\n")
     : ""
 
-  const userPrompt = `TERMOS MONITORADOS:
+  const userPrompts = [
+    `TERMOS MONITORADOS:
 ${terms.map((t) => `- "${t}"`).join("\n")}${intentHint}
 
 Execute web_search pra cada termo (1-2 queries por termo, em PT e EN quando fizer sentido).
-Colete ~${Math.max(5, terms.length * 4)} candidatos no total, SÓ de publishers reais.`
+Colete ~${Math.max(5, terms.length * 4)} candidatos no total, SÓ de publishers reais.`,
+    // Retry: prompt alternativo com queries mais específicas
+    `TERMOS MONITORADOS (segunda tentativa — amplie queries):
+${terms.map((t) => `- "${t}"`).join("\n")}${intentHint}
 
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: userPrompt }]
+Use queries mais variadas: em PT tente "<termo> notícia hoje", "<termo> últimas", "<termo> lançamento"; em EN "<termo> news today", "<termo> announcement", "<termo> update". Inclua blogs especializados tier-2 se tier-1 não rendeu. Colete ~${Math.max(5, terms.length * 4)} candidatos.`,
+  ]
   const totals = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 }
   let searchesUsed = 0
-  let finalText: string | null = null
   const start = Date.now()
+  let candidates: z.infer<typeof DiscoveryResponseSchema>["candidates"] = []
+  let rawParsed: z.infer<typeof DiscoveryResponseSchema> | null = null
 
-  for (let i = 0; i < 4; i++) {
-    const response = await anthropic.messages.create({
-      model: IDEAS_MODEL,
-      max_tokens: 8000,
-      system: [{ type: "text", text: buildDiscoverySystemPrompt(), cache_control: { type: "ephemeral" } }],
-      thinking: { type: "adaptive" },
-      output_config: { format: zodOutputFormat(DiscoveryResponseSchema), effort: "low" },
-      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: Math.max(4, terms.length * 2), blocked_domains: [...BLOCKED_DOMAINS, ...REDIRECT_DOMAINS] }],
-      messages,
-    })
-    totals.input += response.usage.input_tokens
-    totals.output += response.usage.output_tokens
-    totals.cacheRead += response.usage.cache_read_input_tokens ?? 0
-    totals.cacheCreation += response.usage.cache_creation_input_tokens ?? 0
-    for (const b of response.content) {
-      if (b.type === "server_tool_use" && b.name === "web_search") searchesUsed++
+  for (let attempt = 0; attempt < userPrompts.length; attempt++) {
+    const messages: Anthropic.MessageParam[] = [{ role: "user", content: userPrompts[attempt] }]
+    let finalText: string | null = null
+
+    for (let i = 0; i < 4; i++) {
+      const response = await anthropic.messages.create({
+        model: DISCOVERY_MODEL,
+        max_tokens: 6000,
+        system: [{ type: "text", text: buildDiscoverySystemPrompt(), cache_control: { type: "ephemeral" } }],
+        output_config: { format: zodOutputFormat(DiscoveryResponseSchema) },
+        tools: [{ type: "web_search_20260209", name: "web_search", max_uses: Math.max(4, terms.length * 2), blocked_domains: [...BLOCKED_DOMAINS, ...REDIRECT_DOMAINS], allowed_callers: ["direct"] } as any],
+        messages,
+      })
+      totals.input += response.usage.input_tokens
+      totals.output += response.usage.output_tokens
+      totals.cacheRead += response.usage.cache_read_input_tokens ?? 0
+      totals.cacheCreation += response.usage.cache_creation_input_tokens ?? 0
+      for (const b of response.content) {
+        if (b.type === "server_tool_use" && b.name === "web_search") searchesUsed++
+      }
+      if (response.stop_reason === "pause_turn") {
+        messages.push({ role: "assistant", content: response.content })
+        continue
+      }
+      const tb = [...response.content].reverse().find((b): b is Anthropic.TextBlock => b.type === "text")
+      if (!tb) throw new Error(`discovery: sem text (stop=${response.stop_reason})`)
+      finalText = tb.text
+      break
     }
-    if (response.stop_reason === "pause_turn") {
-      messages.push({ role: "assistant", content: response.content })
-      continue
+    if (!finalText) throw new Error("discovery: pause_turn loop exceeded")
+
+    let parsed: z.infer<typeof DiscoveryResponseSchema>
+    try { parsed = DiscoveryResponseSchema.parse(JSON.parse(finalText)) }
+    catch (err) {
+      console.error("[discovery] parse:", err, "raw:", finalText.slice(0, 300))
+      throw new Error("Falha ao parsear discovery")
     }
-    const tb = [...response.content].reverse().find((b): b is Anthropic.TextBlock => b.type === "text")
-    if (!tb) throw new Error(`discovery: sem text (stop=${response.stop_reason})`)
-    finalText = tb.text
-    break
-  }
-  const durationMs = Date.now() - start
-  if (!finalText) throw new Error("discovery: pause_turn loop exceeded")
+    rawParsed = parsed
 
-  let parsed: z.infer<typeof DiscoveryResponseSchema>
-  try { parsed = DiscoveryResponseSchema.parse(JSON.parse(finalText)) }
-  catch (err) {
-    console.error("[discovery] parse:", err, "raw:", finalText.slice(0, 300))
-    throw new Error("Falha ao parsear discovery")
-  }
-
-  // Validation: drop URLs que ainda são agregadores, ou que não são URLs válidas, ou que não casam com termo
-  const validTerms = new Set(terms)
-  const seen = new Set<string>()
-  const candidates = parsed.candidates
-    .filter((c) => c.url && c.title && validTerms.has(c.term))
-    .filter((c) => isRealPublisherUrl(c.url))
-    .filter((c) => {
-      if (seen.has(c.url)) return false
+    console.log(`[discovery] attempt ${attempt + 1}: Claude retornou ${parsed.candidates.length} candidatos brutos (searches=${searchesUsed})`)
+    const validTerms = new Set(terms)
+    const seen = new Set<string>()
+    const dropStats = { missingFields: 0, termMismatch: 0, notPublisher: 0, duplicate: 0, pass: 0 }
+    candidates = []
+    for (const c of parsed.candidates) {
+      if (!c.url || !c.title) { dropStats.missingFields++; continue }
+      if (!validTerms.has(c.term)) { dropStats.termMismatch++; continue }
+      if (!isRealPublisherUrl(c.url)) { dropStats.notPublisher++; continue }
+      if (seen.has(c.url)) { dropStats.duplicate++; continue }
       seen.add(c.url)
-      return true
-    })
+      dropStats.pass++
+      candidates.push(c)
+    }
+    console.log(`[discovery] attempt ${attempt + 1} stats: pass=${dropStats.pass} missing=${dropStats.missingFields} termMismatch=${dropStats.termMismatch} notPublisher=${dropStats.notPublisher} dup=${dropStats.duplicate}`)
 
-  trackUsage(IDEAS_MODEL, "discovery_phase", totals.input, totals.output, durationMs, userId, {
+    if (candidates.length > 0) break
+    if (attempt < userPrompts.length - 1) console.log(`[discovery] 0 válidos — tentando prompt alternativo...`)
+  }
+
+  const durationMs = Date.now() - start
+
+  trackUsage(DISCOVERY_MODEL, "discovery_phase", totals.input, totals.output, durationMs, userId, {
     cacheReadTokens: totals.cacheRead, cacheCreationTokens: totals.cacheCreation,
-    searchesUsed, candidatesFound: candidates.length, candidatesRejected: parsed.candidates.length - candidates.length,
+    searchesUsed, candidatesFound: candidates.length, candidatesRejected: (rawParsed?.candidates.length ?? 0) - candidates.length,
   }).catch(() => {})
 
   return {
@@ -308,8 +332,14 @@ const TriageItemSchema = z.object({
   summary: z.string().describe("Resumo 2-3 frases do CORPO que você leu"),
   keyQuote: z.string().describe("Trecho verbatim (10-40 palavras) do corpo da matéria"),
   sourceAuthority: z.enum(["TIER_1", "TIER_2", "BLOG", "AGGREGATOR", "UNKNOWN"]),
-  language: z.enum(["pt-BR", "en", "es"]),
-  relevanceScore: z.number().describe("0-100: quão DIRETAMENTE a matéria se relaciona com o termo. Abaixo de 70 = rejeitar."),
+  language: z.string().transform((v) => {
+    const l = v.toLowerCase()
+    if (l.startsWith("pt")) return "pt-BR" as const
+    if (l.startsWith("en")) return "en" as const
+    if (l.startsWith("es")) return "es" as const
+    return "pt-BR" as const
+  }).pipe(z.enum(["pt-BR", "en", "es"])),
+  relevanceScore: z.number().describe("0-100: quão DIRETAMENTE a matéria se relaciona com o termo e a intenção."),
   pioneerPotential: z.number().describe("0-100: potencial de virar conteúdo pioneiro"),
   freshnessHours: z.number(),
   topicKeywords: z.array(z.string()).describe("3-6 palavras-chave do TEMA (nomes próprios, eventos) — pro aprofundamento"),
@@ -328,17 +358,14 @@ REGRAS INEGOCIÁVEIS
 - canonicalUrl: extraia do meta og:url ou do URL final pós-redirect.
 - keyQuote DEVE ser verbatim do corpo. Se não consegue citar, você não leu.
 
-RELEVÂNCIA ≠ CORRESPONDÊNCIA LITERAL
+RELEVÂNCIA
 - Cada termo tem uma INTENÇÃO declarada pelo usuário (foco + exclusões).
-- relevanceScore = quão bem a matéria se encaixa na INTENÇÃO, não só no termo literal.
-- Matéria pode ser "sobre o termo" mas FORA da intenção — isso é REJECT.
-  Ex: termo="IA" com intent "foco em APIs de LLM, EXCLUIR IA em animais/arte".
-  Matéria sobre "IA traduz latidos de cães" = literalmente IA, mas é reject (viola exclusões).
-- 90+ só quando a matéria cai exatamente no foco declarado.
-- 80-89: no foco mas tangencial ao fato central.
-- <80 = reject.
+- relevanceScore = quão bem a matéria se encaixa no termo E na intenção.
+- Escala: 85+ no foco central; 70-84 relacionado ao termo/intenção; 50-69 tangencial; <50 fora.
+- Seja generoso: matéria que informa sobre o termo e não viola exclusões → passa.
 
-reject=true se: relevance<80, falhou leitura, opinião sem fato, repost, >72h, viola EXCLUSÕES do intent.
+reject=true APENAS se: falhou leitura (web_fetch não trouxe corpo), repost/cópia óbvia, >72h, OU viola EXCLUSÕES explícitas do intent do usuário.
+Não rejeite por score baixo — use relevanceScore pra sinalizar e deixe o filtro decidir.
 
 topicKeywords: específicos do FATO (nome evento, pessoa, produto) pro próximo estágio.
 
@@ -349,8 +376,48 @@ async function runTriagePhase(opts: { candidates: FeedItem[]; termIntents: Recor
   items: (TriageItem & { candidate: FeedItem })[]
   usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; fetchesUsed: number }
 }> {
-  const { candidates, termIntents, userId } = opts
-  if (candidates.length === 0) return { items: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, fetchesUsed: 0 } }
+  const { candidates: allCandidates, termIntents, userId } = opts
+  if (allCandidates.length === 0) return { items: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, fetchesUsed: 0 } }
+
+  // Cache: NewsEvidence recente (<1h) evita re-fetch e re-classificação
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+  const recentEvidence = await db.newsEvidence.findMany({
+    where: { userId, capturedAt: { gte: oneHourAgo }, summary: { not: "" } },
+    select: { url: true, title: true, summary: true, keyQuote: true, relevanceScore: true, freshnessHours: true, sourceAuthority: true, language: true, publishedAt: true, term: true },
+  })
+  const cacheByTitle = new Map<string, typeof recentEvidence[number]>()
+  for (const ev of recentEvidence) cacheByTitle.set(titleKey(ev.title), ev)
+
+  const cachedItems: (TriageItem & { candidate: FeedItem })[] = []
+  const candidates: FeedItem[] = []
+  for (const c of allCandidates) {
+    const hit = cacheByTitle.get(titleKey(c.title))
+    if (hit && hit.term === c.term) {
+      cachedItems.push({
+        candidateIndex: -1,
+        canonicalUrl: hit.url,
+        title: hit.title,
+        publishedAt: hit.publishedAt?.toISOString() ?? "",
+        summary: hit.summary,
+        keyQuote: hit.keyQuote ?? "",
+        sourceAuthority: (hit.sourceAuthority as TriageItem["sourceAuthority"]) ?? "UNKNOWN",
+        language: (hit.language as TriageItem["language"]) ?? "pt-BR",
+        relevanceScore: hit.relevanceScore,
+        pioneerPotential: Math.max(40, hit.relevanceScore - 10),
+        freshnessHours: hit.freshnessHours ?? 0,
+        topicKeywords: [],
+        reject: false,
+        candidate: c,
+      })
+    } else {
+      candidates.push(c)
+    }
+  }
+  if (cachedItems.length > 0) console.log(`[triage] cache hit: ${cachedItems.length} de ${allCandidates.length} (NewsEvidence <1h)`)
+  if (candidates.length === 0) {
+    console.log(`[triage] 100% cache — pulando Claude`)
+    return { items: cachedItems, usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, fetchesUsed: 0 } }
+  }
 
   // Monta bloco de intenções por termo (só termos presentes nos candidatos)
   const termsInCandidates = Array.from(new Set(candidates.map((c) => c.term)))
@@ -369,7 +436,7 @@ ${candidates.map((c, i) => `[${i}] term="${c.term}" (${c.locale}) · ${c.source}
     URL: ${c.url}
     Snippet RSS: ${c.description.slice(0, 200)}`).join("\n")}
 
-Execute web_fetch em cada URL, extraia os dados e classifique contra a INTENÇÃO do termo. Rejeite liberalmente (reject=true) se viola exclusões ou cai fora do foco declarado.`
+Execute web_fetch em cada URL, extraia os dados e classifique contra o termo + intenção. Use relevanceScore pra sinalizar força do match (não rejeite por score baixo). reject=true só em falha de leitura, repost, ou violação explícita de exclusão.`
 
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: userPrompt }]
   const totals = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 }
@@ -379,12 +446,11 @@ Execute web_fetch em cada URL, extraia os dados e classifique contra a INTENÇÃ
 
   for (let i = 0; i < 5; i++) {
     const response = await anthropic.messages.create({
-      model: IDEAS_MODEL,
-      max_tokens: 16000,
+      model: TRIAGE_MODEL,
+      max_tokens: 8000,
       system: [{ type: "text", text: buildTriageSystemPrompt(), cache_control: { type: "ephemeral" } }],
-      thinking: { type: "adaptive" },
-      output_config: { format: zodOutputFormat(TriageResponseSchema), effort: "medium" },
-      tools: [{ type: "web_fetch_20260209", name: "web_fetch", max_uses: candidates.length + 2, max_content_tokens: 5000, blocked_domains: BLOCKED_DOMAINS }],
+      output_config: { format: zodOutputFormat(TriageResponseSchema) },
+      tools: [{ type: "web_fetch_20260209", name: "web_fetch", max_uses: candidates.length + 2, max_content_tokens: 3500, blocked_domains: BLOCKED_DOMAINS, allowed_callers: ["direct"] } as any],
       messages,
     })
     totals.input += response.usage.input_tokens
@@ -413,21 +479,32 @@ Execute web_fetch em cada URL, extraia os dados e classifique contra a INTENÇÃ
     throw new Error("Falha ao parsear triagem")
   }
 
-  const items = parsed.items
-    .filter((it) => !it.reject && it.relevanceScore >= 80 && it.candidateIndex >= 0 && it.candidateIndex < candidates.length)
-    // Rejeita qualquer canonicalUrl que seja redirect/agregador — só publisher real passa
-    .filter((it) => {
-      if (!isRealPublisherUrl(it.canonicalUrl)) {
-        console.warn(`[triage] drop item: canonicalUrl "${it.canonicalUrl}" não é publisher real`)
-        return false
-      }
-      return true
-    })
+  console.log(`[triage] Claude retornou ${parsed.items.length} items (de ${candidates.length} candidatos)`)
+  const dropStats = { reject: 0, lowRelevance: 0, badIndex: 0, badUrl: 0, pass: 0 }
+  for (const it of parsed.items) {
+    const reasons: string[] = []
+    if (it.reject) { reasons.push(`reject=true(${it.rejectReason ?? "sem-motivo"})`); dropStats.reject++ }
+    if (it.relevanceScore < 70) { reasons.push(`rel=${it.relevanceScore}<70`); if (!it.reject) dropStats.lowRelevance++ }
+    if (it.candidateIndex < 0 || it.candidateIndex >= candidates.length) { reasons.push(`idx=${it.candidateIndex}`); dropStats.badIndex++ }
+    else if (!it.reject && it.relevanceScore >= 70 && !isRealPublisherUrl(it.canonicalUrl)) {
+      reasons.push(`url-não-publisher="${it.canonicalUrl}"`); dropStats.badUrl++
+    }
+    const tag = reasons.length === 0 ? "PASS" : `DROP [${reasons.join(", ")}]`
+    if (reasons.length === 0) dropStats.pass++
+    console.log(`[triage] #${it.candidateIndex} ${tag} rel=${it.relevanceScore} "${it.title?.slice(0, 70) ?? ""}"`)
+  }
+  console.log(`[triage] stats: pass=${dropStats.pass} reject=${dropStats.reject} lowRel=${dropStats.lowRelevance} badIdx=${dropStats.badIndex} badUrl=${dropStats.badUrl}`)
+
+  const freshItems = parsed.items
+    .filter((it) => !it.reject && it.relevanceScore >= 70 && it.candidateIndex >= 0 && it.candidateIndex < candidates.length)
+    .filter((it) => isRealPublisherUrl(it.canonicalUrl))
     .map((it) => ({ ...it, candidate: candidates[it.candidateIndex] }))
 
-  trackUsage(IDEAS_MODEL, "triage_phase", totals.input, totals.output, durationMs, userId, {
+  const items = [...cachedItems, ...freshItems]
+
+  trackUsage(TRIAGE_MODEL, "triage_phase", totals.input, totals.output, durationMs, userId, {
     cacheReadTokens: totals.cacheRead, cacheCreationTokens: totals.cacheCreation,
-    fetchesUsed, itemsQualified: items.length, itemsTotal: candidates.length,
+    fetchesUsed, itemsQualified: items.length, itemsTotal: allCandidates.length, cachedFromDb: cachedItems.length,
   }).catch(() => {})
 
   return { items, usage: { inputTokens: totals.input, outputTokens: totals.output, cacheReadTokens: totals.cacheRead, cacheCreationTokens: totals.cacheCreation, fetchesUsed } }
@@ -443,7 +520,13 @@ const SupportingSourceSchema = z.object({
   summary: z.string(),
   keyQuote: z.string(),
   sourceAuthority: z.enum(["TIER_1", "TIER_2", "BLOG", "AGGREGATOR", "UNKNOWN"]),
-  language: z.enum(["pt-BR", "en", "es"]),
+  language: z.string().transform((v) => {
+    const l = v.toLowerCase()
+    if (l.startsWith("pt")) return "pt-BR" as const
+    if (l.startsWith("en")) return "en" as const
+    if (l.startsWith("es")) return "es" as const
+    return "pt-BR" as const
+  }).pipe(z.enum(["pt-BR", "en", "es"])),
   agreementScore: z.number().describe("0-100: quão fortemente CONFIRMA o fato do primário"),
   addsInfo: z.string().optional().describe("O que esta fonte acrescenta"),
   reject: z.boolean(),
@@ -465,23 +548,19 @@ ESTRATÉGIA DE BUSCA (OBRIGATÓRIA — execute as 2 buscas por primário)
 Pra cada resultado promissor, use web_fetch pra ler o conteúdo antes de incluir.
 
 REGRAS PARA INCLUIR UMA FONTE
-- agreementScore ≥ 70: a fonte CORROBORA o fato do primário (não só toca no tema).
+- agreementScore ≥ 70: a fonte corrobora o FATO do primário (não só toca no tema).
 - publisher DIFERENTE do primário (domain host distinto).
 - URL REAL de publisher (nunca news.google.com, google.com/url, etc).
 - Fato central alinhado com o primário.
 
-REJEITE LIBERALMENTE
-- Repost / agregador sem substância
-- Matéria sobre tema adjacente que não corrobora o fato específico
-- Redirect / URL google news / bing news
-- Opinião pessoal sem apuração
+reject=true apenas se: redirect/agregador, publisher igual ao primário, tema adjacente sem corroborar o fato central, ou opinião sem apuração. Use agreementScore pra calibrar — não seja restritivo além disso.
 
 FILOSOFIA
-Se a primária aparece em 3 publishers BR + 2 publishers EN → é viral real.
-Se aparece só no primário → é notícia solitária (OK incluir como ideia mas com score viral baixo).
-Se você não conseguir web_fetch fontes adicionais, retorne sources=[] pra aquele primário. Não invente.
+Se a primária aparece em 2+ publishers distintos → sinal de viralidade real.
+Se aparece só no primário → OK retornar sources=[] pra aquele primário (ideia sai com viralScore baixo, não é falha).
+Não invente fontes — só inclua o que conseguiu web_fetch e ler.
 
-FORMATO: JSON { sources: [...] } — cada source aponta pro primaryIndex. Mire em 2-4 sources por primário quando o fato for real.`
+FORMATO: JSON { sources: [...] } — cada source aponta pro primaryIndex. Mire em 1-2 sources por primário quando o fato for real.`
 }
 
 async function runDeepResearchPhase(opts: {
@@ -524,14 +603,13 @@ MIRE em 2-4 sources por primário quando houver. 0-1 sources = notícia solitár
 
   for (let i = 0; i < 5; i++) {
     const response = await anthropic.messages.create({
-      model: IDEAS_MODEL,
-      max_tokens: 12000,
+      model: DEEP_MODEL,
+      max_tokens: 8000,
       system: [{ type: "text", text: buildDeepResearchSystemPrompt(), cache_control: { type: "ephemeral" } }],
-      thinking: { type: "adaptive" },
-      output_config: { format: zodOutputFormat(DeepResearchResponseSchema), effort: "medium" },
+      output_config: { format: zodOutputFormat(DeepResearchResponseSchema) },
       tools: [
-        { type: "web_search_20260209", name: "web_search", max_uses: Math.max(qualified.length * 2, qualified.length + 4), blocked_domains: [...BLOCKED_DOMAINS, ...REDIRECT_DOMAINS] },
-        { type: "web_fetch_20260209", name: "web_fetch", max_uses: Math.max(qualified.length * 4, qualified.length + 6), max_content_tokens: 4000, blocked_domains: [...BLOCKED_DOMAINS, ...REDIRECT_DOMAINS] },
+        { type: "web_search_20260209", name: "web_search", max_uses: Math.max(qualified.length * 2, qualified.length + 3), blocked_domains: [...BLOCKED_DOMAINS, ...REDIRECT_DOMAINS], allowed_callers: ["direct"] } as any,
+        { type: "web_fetch_20260209", name: "web_fetch", max_uses: Math.max(qualified.length * 2, qualified.length + 4), max_content_tokens: 3000, blocked_domains: [...BLOCKED_DOMAINS, ...REDIRECT_DOMAINS], allowed_callers: ["direct"] } as any,
       ],
       messages,
     })
@@ -573,7 +651,7 @@ MIRE em 2-4 sources por primário quando houver. 0-1 sources = notícia solitár
     })
     .map((s) => ({ ...s, primary: qualified[s.primaryIndex] }))
 
-  trackUsage(IDEAS_MODEL, "deep_research_phase", totals.input, totals.output, durationMs, userId, {
+  trackUsage(DEEP_MODEL, "deep_research_phase", totals.input, totals.output, durationMs, userId, {
     cacheReadTokens: totals.cacheRead, cacheCreationTokens: totals.cacheCreation,
     searchesUsed, fetchesUsed, supportingFound: sources.length,
   }).catch(() => {})
@@ -586,6 +664,13 @@ MIRE em 2-4 sources por primário quando houver. 0-1 sources = notícia solitár
 
 // ─── Stage 4: narrativa (sem tools) ────────────────────────────────────
 
+const PlatformFitSchema = z.object({
+  reels: z.number().describe("0-100: encaixe pra Instagram Reels (hook rápido, vertical, 15-30s, curiosidade+gancho emocional)"),
+  shorts: z.number().describe("0-100: encaixe pra YouTube Shorts (lead forte nos 3s, 30-60s, alta retenção por curiosidade)"),
+  long: z.number().describe("0-100: encaixe pra YouTube long-form (densidade, narrativa em 3 atos, contrarian, 8-15min)"),
+  tiktok: z.number().describe("0-100: encaixe pra TikTok (tom conversacional, trend-aware, autenticidade acima de produção)"),
+})
+
 const NarrativeIdeaSchema = z.object({
   groupIndex: z.number(),
   title: z.string(),
@@ -595,6 +680,7 @@ const NarrativeIdeaSchema = z.object({
   relevance: z.string(),
   evidenceQuote: z.string(),
   pioneerScore: z.number(),
+  platformFit: PlatformFitSchema,
 })
 const NarrativeResponseSchema = z.object({ ideas: z.array(NarrativeIdeaSchema) })
 
@@ -608,6 +694,14 @@ REGRAS
 - pioneerScore maior com: fresh<48h + apoios + tier-1 + lacuna PT + angle único.
 - Não gere ideia se grupo for fraco.
 - Contrarian > óbvio. Evite "o que você precisa saber sobre X".
+
+PLATFORM FIT (0-100 por plataforma — calibra quão bem a ideia rende em cada formato)
+- Reels: factual rápido, hook emocional, 15-30s, vertical. Alta nota pra fatos recentes com gancho visual.
+- Shorts: lead forte nos 3s, curiosidade, 30-60s. Alta nota pra "sabia que X?" contrarian.
+- Long-form: narrativa em 3 atos, densidade de dados, contexto histórico, 8-15min. Alta nota pra análises profundas e lacunas no que o mercado cobre.
+- TikTok: tom conversacional, trend-aware, 30-90s. Alta nota pra reações autênticas a acontecimentos do dia.
+
+Dê notas que reflitam encaixe REAL — fato denso e técnico cai baixo em TikTok; notícia bombástica com imagem forte cai alto em Reels.
 
 FORMATO: JSON { ideas: [...] }.`
 }
@@ -687,11 +781,10 @@ Qualidade > quantidade. Pular grupos fracos é válido.`
 
   const start = Date.now()
   const response = await anthropic.messages.create({
-    model: IDEAS_MODEL,
+    model: NARRATIVE_MODEL,
     max_tokens: 6000,
     system: [{ type: "text", text: buildNarrativeSystemPrompt(), cache_control: { type: "ephemeral" } }],
-    thinking: { type: "adaptive" },
-    output_config: { format: zodOutputFormat(NarrativeResponseSchema), effort: "medium" },
+    output_config: { format: zodOutputFormat(NarrativeResponseSchema), effort: "low" },
     messages: [{ role: "user", content: userPrompt }],
   })
   const durationMs = Date.now() - start
@@ -706,7 +799,7 @@ Qualidade > quantidade. Pular grupos fracos é válido.`
     .filter((i) => i.groupIndex >= 0 && i.groupIndex < groups.length)
     .map((i) => ({ ...i, group: groups[i.groupIndex] }))
 
-  trackUsage(IDEAS_MODEL, "narrative_phase", response.usage.input_tokens, response.usage.output_tokens, durationMs, userId, {
+  trackUsage(NARRATIVE_MODEL, "narrative_phase", response.usage.input_tokens, response.usage.output_tokens, durationMs, userId, {
     cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
     cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
     ideasReturned: ideas.length,
@@ -724,6 +817,13 @@ Qualidade > quantidade. Pular grupos fracos é válido.`
 }
 
 // ─── Orquestrador público ──────────────────────────────────────────────
+
+export interface PlatformFit {
+  reels: number
+  shorts: number
+  long: number
+  tiktok: number
+}
 
 export interface ResearchedIdea {
   title: string
@@ -743,6 +843,7 @@ export interface ResearchedIdea {
   viralScore: number
   publisherHosts: string[]
   hasInternationalCoverage: boolean
+  platformFit: PlatformFit
 }
 
 interface GenerateIdeasOptions {
@@ -752,6 +853,120 @@ interface GenerateIdeasOptions {
   language?: "pt-BR" | "en" | "both"
   hoursWindow?: number
   userId?: string
+}
+
+// ─── Parallel wrappers: 1 call por termo em paralelo ───────────────────
+
+async function runTriagePhaseParallel(opts: {
+  candidates: FeedItem[]
+  termIntents: Record<string, string>
+  userId: string
+  concurrency: number
+}): Promise<{
+  items: (TriageItem & { candidate: FeedItem })[]
+  usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; fetchesUsed: number }
+}> {
+  const { candidates, termIntents, userId, concurrency } = opts
+  if (candidates.length === 0) return { items: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, fetchesUsed: 0 } }
+
+  const byTerm = new Map<string, FeedItem[]>()
+  for (const c of candidates) {
+    const arr = byTerm.get(c.term) ?? []
+    arr.push(c)
+    byTerm.set(c.term, arr)
+  }
+  const groups = [...byTerm.entries()]
+  console.log(`[triage-parallel] ${groups.length} grupos: ${groups.map(([t, arr]) => `${t}=${arr.length}`).join(", ")}`)
+
+  const results: Array<Awaited<ReturnType<typeof runTriagePhase>>> = []
+  let cursor = 0
+  async function worker() {
+    while (true) {
+      const i = cursor++
+      if (i >= groups.length) return
+      const [term, termCandidates] = groups[i]
+      const intentsForTerm = termIntents[term] ? { [term]: termIntents[term] } : {}
+      try {
+        const res = await runTriagePhase({ candidates: termCandidates, termIntents: intentsForTerm, userId })
+        results.push(res)
+      } catch (err) {
+        console.warn(`[triage-parallel] term="${term}" failed:`, (err as Error).message)
+        results.push({ items: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, fetchesUsed: 0 } })
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, groups.length) }, worker))
+
+  return {
+    items: results.flatMap((r) => r.items),
+    usage: {
+      inputTokens: results.reduce((s, r) => s + r.usage.inputTokens, 0),
+      outputTokens: results.reduce((s, r) => s + r.usage.outputTokens, 0),
+      cacheReadTokens: results.reduce((s, r) => s + r.usage.cacheReadTokens, 0),
+      cacheCreationTokens: results.reduce((s, r) => s + r.usage.cacheCreationTokens, 0),
+      fetchesUsed: results.reduce((s, r) => s + r.usage.fetchesUsed, 0),
+    },
+  }
+}
+
+async function runDeepResearchPhaseParallel(opts: {
+  qualified: (TriageItem & { candidate: FeedItem })[]
+  termIntents: Record<string, string>
+  userId: string
+  concurrency: number
+}): Promise<{
+  sources: (z.infer<typeof SupportingSourceSchema> & { primary: TriageItem & { candidate: FeedItem } })[]
+  usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; searchesUsed: number; fetchesUsed: number }
+}> {
+  const { qualified, termIntents, userId, concurrency } = opts
+  if (qualified.length === 0) return { sources: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, searchesUsed: 0, fetchesUsed: 0 } }
+
+  // Agrupa por termo preservando o índice global de cada qualified
+  const byTerm = new Map<string, { globalIdx: number; item: TriageItem & { candidate: FeedItem } }[]>()
+  qualified.forEach((q, globalIdx) => {
+    const arr = byTerm.get(q.candidate.term) ?? []
+    arr.push({ globalIdx, item: q })
+    byTerm.set(q.candidate.term, arr)
+  })
+  const groups = [...byTerm.entries()]
+  console.log(`[deep-parallel] ${groups.length} grupos: ${groups.map(([t, arr]) => `${t}=${arr.length}`).join(", ")}`)
+
+  const results: Array<Awaited<ReturnType<typeof runDeepResearchPhase>>> = []
+  let cursor = 0
+  async function worker() {
+    while (true) {
+      const i = cursor++
+      if (i >= groups.length) return
+      const [term, termEntries] = groups[i]
+      const termQualified = termEntries.map((e) => e.item)
+      const intentsForTerm = termIntents[term] ? { [term]: termIntents[term] } : {}
+      try {
+        const res = await runDeepResearchPhase({ qualified: termQualified, termIntents: intentsForTerm, userId })
+        // Remapeia primaryIndex local → global
+        const remapped = {
+          ...res,
+          sources: res.sources.map((s) => ({ ...s, primaryIndex: termEntries[s.primaryIndex]?.globalIdx ?? -1 })).filter((s) => s.primaryIndex >= 0),
+        }
+        results.push(remapped)
+      } catch (err) {
+        console.warn(`[deep-parallel] term="${term}" failed:`, (err as Error).message)
+        results.push({ sources: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, searchesUsed: 0, fetchesUsed: 0 } })
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, groups.length) }, worker))
+
+  return {
+    sources: results.flatMap((r) => r.sources),
+    usage: {
+      inputTokens: results.reduce((s, r) => s + r.usage.inputTokens, 0),
+      outputTokens: results.reduce((s, r) => s + r.usage.outputTokens, 0),
+      cacheReadTokens: results.reduce((s, r) => s + r.usage.cacheReadTokens, 0),
+      cacheCreationTokens: results.reduce((s, r) => s + r.usage.cacheCreationTokens, 0),
+      searchesUsed: results.reduce((s, r) => s + r.usage.searchesUsed, 0),
+      fetchesUsed: results.reduce((s, r) => s + r.usage.fetchesUsed, 0),
+    },
+  }
 }
 
 export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Promise<{
@@ -774,34 +989,83 @@ export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Pro
   const empty = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, searchesUsed: 0, fetchesUsed: 0, evidencesCaptured: 0, candidatesFromRss: 0, qualifiedAfterTriage: 0, supportingFound: 0 }
   if (terms.length === 0) return { ideas: [], usage: empty }
 
-  // Stage 1 — discovery via Claude web_search (URLs reais de publishers)
-  const discovery = await runDiscoveryPhase({ terms, termIntents, userId })
-  console.log(`[pipeline] stage1: ${discovery.candidates.length} candidatos (via web_search)`)
-  if (discovery.candidates.length === 0) return { ideas: [], usage: empty }
+  // Stage 0 — RSS discovery (determinístico, sem custo Anthropic)
+  const rssItems = await discoverCandidates({ terms, hoursWindow })
+  const rssByTerm = new Map<string, number>()
+  for (const item of rssItems) rssByTerm.set(item.term, (rssByTerm.get(item.term) ?? 0) + 1)
+  console.log(`[pipeline] stage0 (rss): ${rssItems.length} candidatos (${[...rssByTerm.entries()].map(([t, n]) => `${t}=${n}`).join(", ")})`)
 
-  // Adapta discovery → formato FeedItem pra reutilizar triage
-  const candidates: FeedItem[] = discovery.candidates.map((c) => ({
-    term: c.term,
-    title: c.title,
-    url: c.url,
-    pubDate: safeDate(c.publishedAt),
-    source: c.publisher,
-    description: c.snippet,
-    locale: c.locale === "en-US" ? "en-US" : "pt-BR",
-  }))
+  // Stage 1 — Claude web_search só pros termos com cobertura RSS baixa (<3 itens)
+  const undercoveredTerms = terms.filter((t) => (rssByTerm.get(t) ?? 0) < 3)
+  let claudeDiscoveryUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, searchesUsed: 0 }
+  const claudeItems: FeedItem[] = []
+  if (undercoveredTerms.length > 0) {
+    const undercoveredIntents: Record<string, string> = {}
+    for (const t of undercoveredTerms) if (termIntents[t]) undercoveredIntents[t] = termIntents[t]
+    const discovery = await runDiscoveryPhase({ terms: undercoveredTerms, termIntents: undercoveredIntents, userId })
+    claudeDiscoveryUsage = discovery.usage
+    console.log(`[pipeline] stage1 (claude, ${undercoveredTerms.length} termos undercovered): ${discovery.candidates.length} candidatos`)
+    for (const c of discovery.candidates) {
+      claudeItems.push({
+        term: c.term,
+        title: c.title,
+        url: c.url,
+        pubDate: safeDate(c.publishedAt),
+        source: c.publisher,
+        description: c.snippet,
+        locale: c.locale === "en-US" ? "en-US" : "pt-BR",
+      })
+    }
+  } else {
+    console.log(`[pipeline] stage1: pulado (todos termos com ≥3 RSS)`)
+  }
 
-  // Stage 2 — triagem (usa intent pra descartar matérias fora do foco)
-  const triage = await runTriagePhase({ candidates, termIntents, userId })
+  // Merge RSS + Claude, dedup por URL
+  const seenUrl = new Set<string>()
+  const merged: FeedItem[] = []
+  for (const item of [...rssItems, ...claudeItems]) {
+    const key = item.url.toLowerCase()
+    if (seenUrl.has(key)) continue
+    seenUrl.add(key)
+    merged.push(item)
+  }
+
+  // Resolve redirects do Google News → URL real do publisher (em paralelo, timeout 4s cada).
+  // Sem isso o web_fetch do Haiku não consegue ler o corpo da matéria.
+  const resolveStart = Date.now()
+  const urlsResolved = await resolveGoogleNewsUrls(merged.map((i) => i.url), 6)
+  const candidates: FeedItem[] = merged.map((item, idx) => ({ ...item, url: urlsResolved[idx] ?? item.url }))
+  const resolvedCount = candidates.filter((c, i) => c.url !== merged[i].url).length
+  console.log(`[pipeline] stage0+1 merged: ${candidates.length} únicos (rss=${rssItems.length} claude=${claudeItems.length}) — ${resolvedCount} redirects resolvidos em ${Date.now() - resolveStart}ms`)
+
+  if (candidates.length === 0) {
+    return {
+      ideas: [],
+      usage: { ...empty, ...claudeDiscoveryUsage },
+    }
+  }
+
+  // Stage 2 — triagem: 1 call por termo em paralelo (concurrency=2 pra não estourar rate limit)
+  const triage = await runTriagePhaseParallel({ candidates, termIntents, userId, concurrency: 2 })
   console.log(`[pipeline] stage2: ${triage.items.length} qualificados de ${candidates.length}`)
   if (triage.items.length === 0) {
     return {
       ideas: [],
-      usage: { ...empty, inputTokens: triage.usage.inputTokens, outputTokens: triage.usage.outputTokens, cacheReadTokens: triage.usage.cacheReadTokens, cacheCreationTokens: triage.usage.cacheCreationTokens, fetchesUsed: triage.usage.fetchesUsed, candidatesFromRss: candidates.length },
+      usage: {
+        ...empty,
+        inputTokens: claudeDiscoveryUsage.inputTokens + triage.usage.inputTokens,
+        outputTokens: claudeDiscoveryUsage.outputTokens + triage.usage.outputTokens,
+        cacheReadTokens: claudeDiscoveryUsage.cacheReadTokens + triage.usage.cacheReadTokens,
+        cacheCreationTokens: claudeDiscoveryUsage.cacheCreationTokens + triage.usage.cacheCreationTokens,
+        searchesUsed: claudeDiscoveryUsage.searchesUsed,
+        fetchesUsed: triage.usage.fetchesUsed,
+        candidatesFromRss: candidates.length,
+      },
     }
   }
 
-  // Stage 3 — aprofundamento (intent passado pra não divergir no deep research)
-  const deep = await runDeepResearchPhase({ qualified: triage.items, termIntents, userId })
+  // Stage 3 — aprofundamento paralelo por termo
+  const deep = await runDeepResearchPhaseParallel({ qualified: triage.items, termIntents, userId, concurrency: 2 })
   console.log(`[pipeline] stage3: ${deep.sources.length} fontes de apoio`)
 
   // Persiste primários
@@ -870,6 +1134,12 @@ export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Pro
       viralScore: metrics.viralScore,
       publisherHosts: metrics.publisherHosts,
       hasInternationalCoverage: metrics.hasInternationalCoverage,
+      platformFit: {
+        reels: Math.max(0, Math.min(100, Math.round(i.platformFit?.reels ?? 50))),
+        shorts: Math.max(0, Math.min(100, Math.round(i.platformFit?.shorts ?? 50))),
+        long: Math.max(0, Math.min(100, Math.round(i.platformFit?.long ?? 50))),
+        tiktok: Math.max(0, Math.min(100, Math.round(i.platformFit?.tiktok ?? 50))),
+      },
     })
   }
 
@@ -881,11 +1151,11 @@ export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Pro
   return {
     ideas,
     usage: {
-      inputTokens: triage.usage.inputTokens + deep.usage.inputTokens + narr.usage.inputTokens,
-      outputTokens: triage.usage.outputTokens + deep.usage.outputTokens + narr.usage.outputTokens,
-      cacheReadTokens: triage.usage.cacheReadTokens + deep.usage.cacheReadTokens + narr.usage.cacheReadTokens,
-      cacheCreationTokens: triage.usage.cacheCreationTokens + deep.usage.cacheCreationTokens + narr.usage.cacheCreationTokens,
-      searchesUsed: deep.usage.searchesUsed,
+      inputTokens: claudeDiscoveryUsage.inputTokens + triage.usage.inputTokens + deep.usage.inputTokens + narr.usage.inputTokens,
+      outputTokens: claudeDiscoveryUsage.outputTokens + triage.usage.outputTokens + deep.usage.outputTokens + narr.usage.outputTokens,
+      cacheReadTokens: claudeDiscoveryUsage.cacheReadTokens + triage.usage.cacheReadTokens + deep.usage.cacheReadTokens + narr.usage.cacheReadTokens,
+      cacheCreationTokens: claudeDiscoveryUsage.cacheCreationTokens + triage.usage.cacheCreationTokens + deep.usage.cacheCreationTokens + narr.usage.cacheCreationTokens,
+      searchesUsed: claudeDiscoveryUsage.searchesUsed + deep.usage.searchesUsed,
       fetchesUsed: triage.usage.fetchesUsed + deep.usage.fetchesUsed,
       evidencesCaptured: primaryToEvId.size + [...supportingIdsByPrimary.values()].flat().length,
       candidatesFromRss: candidates.length,

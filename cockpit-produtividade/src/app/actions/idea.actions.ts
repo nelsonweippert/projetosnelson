@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
+import { Prisma } from "@/generated/prisma/client"
 import type { ActionResult } from "@/types"
 
 async function getUserId() {
@@ -110,7 +111,15 @@ export async function generateIdeasNowAction(): Promise<ActionResult> {
     })
 
     if (ideas.length === 0) {
-      return { success: false, error: "Nenhuma notícia relevante encontrada nas últimas 72h para os termos monitorados. Tente ampliar os termos ou voltar mais tarde." }
+      const stage = usage.candidatesFromRss === 0
+        ? "discovery (RSS + web_search não trouxeram matérias válidas)"
+        : usage.qualifiedAfterTriage === 0
+        ? `triagem (${usage.candidatesFromRss} candidatos lidos, nenhum com relevance ≥ 70 ou todos violaram intent)`
+        : "narrativa (fontes insuficientes para gerar ideia)"
+      return {
+        success: false,
+        error: `Nenhuma ideia gerada — travou em: ${stage}. Counts: discovery=${usage.candidatesFromRss}, triagem=${usage.qualifiedAfterTriage}, apoio=${usage.supportingFound}.`,
+      }
     }
 
     const created = await db.ideaFeed.createMany({
@@ -132,6 +141,7 @@ export async function generateIdeasNowAction(): Promise<ActionResult> {
         viralScore: idea.viralScore,
         publisherHosts: idea.publisherHosts,
         hasInternationalCoverage: idea.hasInternationalCoverage,
+        platformFit: idea.platformFit as unknown as Prisma.InputJsonValue,
         score: Math.min(100, Math.max(0, idea.pioneerScore)),
         userId,
       })),
