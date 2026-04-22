@@ -219,12 +219,15 @@ FORMATO: JSON { candidates: [...] }.`
 async function runDiscoveryPhase(opts: {
   terms: string[]
   termIntents: Record<string, string>
+  // Mapa termo → hosts permitidos (allowed_domains). Quando presente, restringe
+  // web_search àquelas fontes curadas. Quando vazio/undef, busca livre.
+  sourcesByTerm?: Record<string, string[]>
   userId: string
 }): Promise<{
   candidates: { term: string; url: string; title: string; snippet: string; publisher: string; publishedAt?: string; locale: "pt-BR" | "en-US" | "other" }[]
   usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; searchesUsed: number }
 }> {
-  const { terms, termIntents, userId } = opts
+  const { terms, termIntents, sourcesByTerm = {}, userId } = opts
   if (terms.length === 0) return { candidates: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, searchesUsed: 0 } }
 
   const intentHint = Object.entries(termIntents).length > 0
@@ -232,17 +235,30 @@ async function runDiscoveryPhase(opts: {
       Object.entries(termIntents).map(([t, i]) => `- "${t}": ${i}`).join("\n")
     : ""
 
+  // União das fontes de todos os termos passados — vira allowed_domains
+  const allAllowedDomains = Array.from(new Set(terms.flatMap((t) => sourcesByTerm[t] ?? [])))
+  const hasCuratedSources = allAllowedDomains.length > 0
+  const sourcesHint = hasCuratedSources
+    ? `\nFONTES CURADAS (só busque nessas):\n${terms.map((t) => {
+        const s = sourcesByTerm[t] ?? []
+        return s.length > 0 ? `- "${t}": ${s.join(", ")}` : `- "${t}": (sem curadoria, busca livre)`
+      }).join("\n")}`
+    : ""
+
   const userPrompts = [
     `TERMOS MONITORADOS:
-${terms.map((t) => `- "${t}"`).join("\n")}${intentHint}
+${terms.map((t) => `- "${t}"`).join("\n")}${intentHint}${sourcesHint}
 
 Execute web_search pra cada termo (1-2 queries por termo, em PT e EN quando fizer sentido).
-Colete ~${Math.max(5, terms.length * 4)} candidatos no total, SÓ de publishers reais.`,
+${hasCuratedSources
+  ? "IMPORTANTE: O allowed_domains do web_search JÁ RESTRINGE a busca às fontes curadas. Não precisa usar operador site: nas queries."
+  : "Colete candidatos SÓ de publishers reais (evite news.google.com, bing.com/news)."}
+Mire em ~${Math.max(5, terms.length * 4)} candidatos no total.`,
     // Retry: prompt alternativo com queries mais específicas
     `TERMOS MONITORADOS (segunda tentativa — amplie queries):
-${terms.map((t) => `- "${t}"`).join("\n")}${intentHint}
+${terms.map((t) => `- "${t}"`).join("\n")}${intentHint}${sourcesHint}
 
-Use queries mais variadas: em PT tente "<termo> notícia hoje", "<termo> últimas", "<termo> lançamento"; em EN "<termo> news today", "<termo> announcement", "<termo> update". Inclua blogs especializados tier-2 se tier-1 não rendeu. Colete ~${Math.max(5, terms.length * 4)} candidatos.`,
+Use queries mais variadas: em PT tente "<termo> notícia hoje", "<termo> últimas", "<termo> lançamento"; em EN "<termo> news today", "<termo> announcement", "<termo> update". Colete ~${Math.max(5, terms.length * 4)} candidatos.`,
   ]
   const totals = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 }
   let searchesUsed = 0
@@ -255,12 +271,24 @@ Use queries mais variadas: em PT tente "<termo> notícia hoje", "<termo> última
     let finalText: string | null = null
 
     for (let i = 0; i < 4; i++) {
+      // Quando há fontes curadas, usa allowed_domains (restringe). Caso contrário, usa blocked_domains (busca livre excluindo lixo).
+      const searchTool: Record<string, unknown> = {
+        type: "web_search_20260209",
+        name: "web_search",
+        max_uses: Math.max(4, terms.length * 2),
+        allowed_callers: ["direct"],
+      }
+      if (hasCuratedSources) {
+        searchTool.allowed_domains = allAllowedDomains
+      } else {
+        searchTool.blocked_domains = [...BLOCKED_DOMAINS, ...REDIRECT_DOMAINS]
+      }
       const response = await anthropic.messages.create({
         model: DISCOVERY_MODEL,
         max_tokens: 6000,
         system: [{ type: "text", text: buildDiscoverySystemPrompt(), cache_control: { type: "ephemeral" } }],
         output_config: { format: zodOutputFormat(DiscoveryResponseSchema) },
-        tools: [{ type: "web_search_20260209", name: "web_search", max_uses: Math.max(4, terms.length * 2), blocked_domains: [...BLOCKED_DOMAINS, ...REDIRECT_DOMAINS], allowed_callers: ["direct"] } as any],
+        tools: [searchTool as any],
         messages,
       })
       totals.input += response.usage.input_tokens
@@ -989,22 +1017,51 @@ export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Pro
   const empty = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, searchesUsed: 0, fetchesUsed: 0, evidencesCaptured: 0, candidatesFromRss: 0, qualifiedAfterTriage: 0, supportingFound: 0 }
   if (terms.length === 0) return { ideas: [], usage: empty }
 
-  // Stage 0 — RSS discovery (determinístico, sem custo Anthropic)
-  const rssItems = await discoverCandidates({ terms, hoursWindow })
+  // Busca fontes curadas dos termos (se houver) pra direcionar a pesquisa.
+  // Termos com fontes → pesquisa focada com allowed_domains.
+  // Termos sem fontes → fallback pra RSS + web_search amplo.
+  const monitorTerms = await db.monitorTerm.findMany({
+    where: { userId, term: { in: terms } },
+    select: { term: true, sources: true },
+  })
+  const sourcesByTerm: Record<string, string[]> = {}
+  for (const mt of monitorTerms) {
+    const arr = Array.isArray(mt.sources) ? (mt.sources as any[]) : []
+    const hosts = arr.filter((s) => s && s.isActive !== false && typeof s.host === "string").map((s) => s.host)
+    if (hosts.length > 0) sourcesByTerm[mt.term] = hosts
+  }
+  const termsWithSources = terms.filter((t) => sourcesByTerm[t]?.length)
+  const termsWithoutSources = terms.filter((t) => !sourcesByTerm[t]?.length)
+  console.log(`[pipeline] curadoria: ${termsWithSources.length} termos com fontes, ${termsWithoutSources.length} sem (fallback RSS)`)
+
+  // ── Stage 0 — RSS só pros termos SEM fontes curadas (fallback legado)
+  const rssItems = termsWithoutSources.length > 0
+    ? await discoverCandidates({ terms: termsWithoutSources, hoursWindow })
+    : []
   const rssByTerm = new Map<string, number>()
   for (const item of rssItems) rssByTerm.set(item.term, (rssByTerm.get(item.term) ?? 0) + 1)
-  console.log(`[pipeline] stage0 (rss): ${rssItems.length} candidatos (${[...rssByTerm.entries()].map(([t, n]) => `${t}=${n}`).join(", ")})`)
+  if (termsWithoutSources.length > 0) {
+    console.log(`[pipeline] stage0 (rss, ${termsWithoutSources.length} termos sem fontes): ${rssItems.length} candidatos`)
+  }
 
-  // Stage 1 — Claude web_search só pros termos com cobertura RSS baixa (<3 itens)
-  const undercoveredTerms = terms.filter((t) => (rssByTerm.get(t) ?? 0) < 3)
+  // ── Stage 1 — Claude web_search:
+  // - Pros termos COM fontes curadas: allowed_domains restrito
+  // - Pros termos SEM fontes com cobertura RSS baixa (<3): busca livre
+  const undercoveredTerms = termsWithoutSources.filter((t) => (rssByTerm.get(t) ?? 0) < 3)
+  const claudeTerms = [...termsWithSources, ...undercoveredTerms]
   let claudeDiscoveryUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, searchesUsed: 0 }
   const claudeItems: FeedItem[] = []
-  if (undercoveredTerms.length > 0) {
-    const undercoveredIntents: Record<string, string> = {}
-    for (const t of undercoveredTerms) if (termIntents[t]) undercoveredIntents[t] = termIntents[t]
-    const discovery = await runDiscoveryPhase({ terms: undercoveredTerms, termIntents: undercoveredIntents, userId })
+  if (claudeTerms.length > 0) {
+    const claudeIntents: Record<string, string> = {}
+    for (const t of claudeTerms) if (termIntents[t]) claudeIntents[t] = termIntents[t]
+    const discovery = await runDiscoveryPhase({
+      terms: claudeTerms,
+      termIntents: claudeIntents,
+      sourcesByTerm,
+      userId,
+    })
     claudeDiscoveryUsage = discovery.usage
-    console.log(`[pipeline] stage1 (claude, ${undercoveredTerms.length} termos undercovered): ${discovery.candidates.length} candidatos`)
+    console.log(`[pipeline] stage1 (claude, ${claudeTerms.length} termos, ${termsWithSources.length} com curadoria): ${discovery.candidates.length} candidatos`)
     for (const c of discovery.candidates) {
       claudeItems.push({
         term: c.term,
@@ -1017,7 +1074,7 @@ export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Pro
       })
     }
   } else {
-    console.log(`[pipeline] stage1: pulado (todos termos com ≥3 RSS)`)
+    console.log(`[pipeline] stage1: pulado`)
   }
 
   // Merge RSS + Claude, dedup por URL

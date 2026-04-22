@@ -63,6 +63,66 @@ export async function deleteMonitorTermAction(id: string): Promise<ActionResult>
   } catch { return { success: false, error: "Erro ao remover termo" } }
 }
 
+// ── Term Sources ────────────────────────────────────────────────────────
+// Curadoria de fontes por termo. Ao invés de pesquisa genérica no Google News,
+// o pipeline usa allowed_domains restrito a essas fontes quando termo tem curadoria.
+
+export async function discoverSourcesForTermAction(termId: string): Promise<ActionResult> {
+  try {
+    const userId = await getUserId()
+    const term = await db.monitorTerm.findFirst({ where: { id: termId, userId } })
+    if (!term) return { success: false, error: "Termo não encontrado" }
+
+    const { discoverSourcesForTerm } = await import("@/services/source-discovery.service")
+    const { sources, usage } = await discoverSourcesForTerm({
+      term: term.term,
+      intent: term.intent,
+    })
+
+    // Merge com fontes existentes: preserva fontes manuais (isActive flag) e adiciona novas.
+    // Se host já existe, mantém o estado isActive do usuário (pode ter desativado).
+    const existing = Array.isArray(term.sources) ? (term.sources as any[]) : []
+    const existingByHost = new Map<string, any>(existing.map((s) => [s.host, s]))
+    const merged = sources.map((s) => {
+      const prev = existingByHost.get(s.host)
+      return prev ? { ...s, isActive: prev.isActive ?? true } : s
+    })
+    // Adiciona fontes manuais do usuário que o Claude não mencionou (preserva)
+    for (const s of existing) {
+      if (!merged.find((m) => m.host === s.host)) merged.push(s)
+    }
+
+    const updated = await db.monitorTerm.update({
+      where: { id: termId, userId },
+      data: {
+        sources: merged as unknown as Prisma.InputJsonValue,
+        sourcesUpdatedAt: new Date(),
+      },
+    })
+
+    console.log(`[discoverSources] term="${term.term}" found=${sources.length} merged=${merged.length} searches=${usage.searchesUsed}`)
+    revalidatePath("/conteudo")
+    return { success: true, data: updated }
+  } catch (err) {
+    console.error("[discoverSources]", err)
+    const msg = err instanceof Error ? err.message : "Erro ao descobrir fontes"
+    return { success: false, error: msg }
+  }
+}
+
+// Atualiza as fontes de um termo (toggle/remover/adicionar manual)
+export async function updateTermSourcesAction(termId: string, sources: unknown[]): Promise<ActionResult> {
+  try {
+    const userId = await getUserId()
+    const updated = await db.monitorTerm.update({
+      where: { id: termId, userId },
+      data: { sources: sources as unknown as Prisma.InputJsonValue },
+    })
+    revalidatePath("/conteudo")
+    return { success: true, data: updated }
+  } catch { return { success: false, error: "Erro ao atualizar fontes" } }
+}
+
 // ── Idea Feed ───────────────────────────────────────────────────────────
 
 export async function getIdeasAction(): Promise<ActionResult> {

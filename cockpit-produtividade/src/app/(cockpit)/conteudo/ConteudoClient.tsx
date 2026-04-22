@@ -17,6 +17,7 @@ import type { Area, ContentPhase, Platform, ContentFormat } from "@/types"
 import { DatePicker } from "@/components/ui/DatePicker"
 import { ContentDetailPanel } from "./ContentDetailPanel"
 import { IdeaCard } from "./IdeaCard"
+import { TermSourcesManager, type TermSource } from "./TermSourcesManager"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Content = any
@@ -755,6 +756,23 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                       {manageTermsOpen ? "fechar" : "gerenciar"}
                     </button>
                   </div>
+                  {/* Status de curadoria de fontes */}
+                  {(() => {
+                    const active = monitorTerms.filter((t: any) => t.isActive)
+                    if (active.length === 0) return null
+                    const withSources = active.filter((t: any) => Array.isArray(t.sources) && t.sources.some((s: any) => s?.isActive)).length
+                    const pct = Math.round((withSources / active.length) * 100)
+                    return (
+                      <div className="mt-2 flex items-center gap-2 text-[10px]">
+                        <div className="flex-1 h-1 bg-cockpit-border-light rounded-full overflow-hidden">
+                          <div className={cn("h-full rounded-full transition-all", pct === 100 ? "bg-emerald-500" : pct > 0 ? "bg-accent" : "bg-cockpit-border")} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-cockpit-muted whitespace-nowrap">
+                          {withSources}/{active.length} com fontes curadas
+                        </span>
+                      </div>
+                    )
+                  })()}
                 </div>
                 <button onClick={handleGenerateIdeas} disabled={generatingIdeas || monitorTerms.filter((t: any) => t.isActive).length === 0}
                   className="mt-3 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover disabled:opacity-50 transition-colors">
@@ -843,6 +861,15 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                           + adicionar foco (recomendado)
                         </button>
                       )}
+
+                      {/* Gerenciamento de fontes curadas */}
+                      <TermSourcesManager
+                        termId={t.id}
+                        sources={Array.isArray(t.sources) ? (t.sources as TermSource[]) : []}
+                        onSourcesChange={(newSources) => {
+                          setMonitorTerms((prev: any[]) => prev.map((mt) => mt.id === t.id ? { ...mt, sources: newSources } : mt))
+                        }}
+                      />
                     </div>
                   ))}
                   {monitorTerms.length === 0 && <p className="text-xs text-cockpit-muted">Nenhum termo ainda. Adicione abaixo.</p>}

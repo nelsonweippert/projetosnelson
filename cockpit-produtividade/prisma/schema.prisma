@@ -440,6 +440,10 @@ model MonitorTerm {
   term      String
   intent    String?  // Foco/exclusões do usuário pro termo — guia a triagem
   isActive  Boolean  @default(true)
+  // Fontes curadas pra esse termo — usadas como allowed_domains na pesquisa.
+  // [{ host, name, tier: TIER_1|TIER_2|BLOG, language: pt-BR|en|es, note?, isActive }]
+  sources   Json?
+  sourcesUpdatedAt DateTime?  // última vez que o usuário rodou "pesquisar fontes"
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
