@@ -92,6 +92,10 @@ export function ConteudoClient({ initialContents, areas }: Props) {
   const [customIdeaLoading, setCustomIdeaLoading] = useState(false)
   const [customIdeaTerm, setCustomIdeaTerm] = useState<string>("")
   const [ideaError, setIdeaError] = useState<string | null>(null)
+  const [ideaMode, setIdeaMode] = useState<"engine" | "manual">("engine")
+  const [manualTitle, setManualTitle] = useState("")
+  const [manualStory, setManualStory] = useState("")
+  const [manualLoading, setManualLoading] = useState(false)
 
   useEffect(() => {
     if (tab === "ideas" && !ideasLoaded) {
@@ -192,6 +196,27 @@ export function ConteudoClient({ initialContents, areas }: Props) {
       setIdeaError(`Erro: ${err?.message || "conexão falhou"}`)
     }
     setCustomIdeaLoading(false)
+  }
+
+  async function handleManualIdea() {
+    if (!manualTitle.trim() || !manualStory.trim()) return
+    setManualLoading(true)
+    setIdeaError(null)
+    startTransition(async () => {
+      const result = await createContentAction({
+        title: manualTitle.trim(),
+        research: manualStory.trim(),
+      })
+      if (result.success) {
+        setContents((prev) => [result.data as Content, ...prev])
+        setSelectedContent(result.data as Content)
+        setManualTitle("")
+        setManualStory("")
+      } else {
+        setIdeaError("Erro ao criar conteúdo manual")
+      }
+      setManualLoading(false)
+    })
   }
 
   async function handleUseIdea(idea: any) {
@@ -646,6 +671,45 @@ export function ConteudoClient({ initialContents, areas }: Props) {
         {/* ═══ TAB: REPOSITÓRIO DE IDEIAS ═══ */}
         {tab === "ideas" && (
           <div className="space-y-5">
+            {/* Mode selector: engine vs manual */}
+            <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1 w-fit">
+              <button onClick={() => setIdeaMode("engine")}
+                className={cn("px-4 py-2 rounded-lg text-xs font-semibold transition-colors",
+                  ideaMode === "engine" ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
+                🤖 Motor de ideias
+              </button>
+              <button onClick={() => setIdeaMode("manual")}
+                className={cn("px-4 py-2 rounded-lg text-xs font-semibold transition-colors",
+                  ideaMode === "manual" ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
+                ✍️ Minha própria ideia
+              </button>
+            </div>
+
+            {ideaMode === "manual" && (
+              <div className="cockpit-card">
+                <h3 className="text-xs font-semibold text-cockpit-text uppercase tracking-wider mb-1">✍️ Escreva sua ideia</h3>
+                <p className="text-[10px] text-cockpit-muted mb-3">Sem IA, sem variações — o texto vira a base do seu conteúdo e o fluxo (elaboração, briefing, roteiro) se ajusta em cima dele.</p>
+                {ideaError && (
+                  <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 mb-3">{ideaError}</div>
+                )}
+                <div className="space-y-2">
+                  <input type="text" value={manualTitle} onChange={(e) => setManualTitle(e.target.value)}
+                    placeholder="Título do conteúdo"
+                    className="w-full px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30" />
+                  <textarea value={manualStory} onChange={(e) => setManualStory(e.target.value)} rows={6}
+                    placeholder="História ou tema — escreva livremente o que você quer criar. Isso será usado como base pra elaboração e roteiro."
+                    className="w-full px-3 py-2.5 bg-cockpit-bg border border-cockpit-border rounded-xl text-sm text-cockpit-text placeholder:text-cockpit-muted focus:outline-none focus:ring-1 focus:ring-accent/30 resize-none" />
+                  <div className="flex justify-end">
+                    <button onClick={handleManualIdea} disabled={!manualTitle.trim() || !manualStory.trim() || manualLoading}
+                      className="flex items-center gap-1.5 px-4 py-2.5 bg-accent text-black text-xs font-semibold rounded-xl hover:bg-accent-hover disabled:opacity-50">
+                      {manualLoading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Usar essa ideia
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {ideaMode === "engine" && (<>
             {/* Monitor terms */}
             <div className="cockpit-card">
               <div className="flex items-center justify-between mb-3">
@@ -751,6 +815,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                 </button>
               </div>
             </div>
+            </>)}
 
             {/* Filters — only monitored terms + "Outros" */}
             {ideaFeed.length > 0 && (() => {
