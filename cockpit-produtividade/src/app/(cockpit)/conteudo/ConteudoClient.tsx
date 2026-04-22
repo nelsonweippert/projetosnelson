@@ -148,24 +148,17 @@ export function ConteudoClient({ initialContents, areas }: Props) {
     setGeneratingIdeas(true)
     setIdeaError(null)
     try {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 115000)
-      const res = await fetch("/api/content/ideas", { method: "POST", signal: controller.signal })
-      clearTimeout(timeout)
-      let data
-      try { data = await res.json() } catch { data = { error: `Status ${res.status}: resposta não é JSON` } }
-      if (res.ok && data.ideas) {
-        setIdeaFeed(data.ideas)
-        if (data.created === 0) setIdeaError("Nenhuma ideia gerada. Tente novamente.")
+      const result = await generateIdeasNowAction()
+      if (result.success) {
+        const ideasRes = await getIdeasAction()
+        if (ideasRes.success) setIdeaFeed(ideasRes.data as any[])
+        const data = result.data as { count: number } | null
+        if (data && data.count === 0) setIdeaError("Nenhuma ideia nova (nada relevante nas últimas 72h).")
       } else {
-        setIdeaError(data.error || `Erro ${res.status}`)
+        setIdeaError(result.error || "Erro ao gerar ideias")
       }
     } catch (err: any) {
-      if (err?.name === "AbortError") {
-        setIdeaError("Timeout: a pesquisa demorou mais de 2 minutos. Tente novamente.")
-      } else {
-        setIdeaError(`Erro: ${err?.message || "conexão falhou"}`)
-      }
+      setIdeaError(`Erro: ${err?.message || "falha inesperada"}`)
     }
     setGeneratingIdeas(false)
   }
@@ -292,6 +285,14 @@ export function ConteudoClient({ initialContents, areas }: Props) {
 
   const ideas = useMemo(() => contents.filter((c: Content) => c.phase === "IDEATION"), [contents])
   const recentPublished = useMemo(() => contents.filter((c: Content) => c.phase === "PUBLISHED").slice(0, 5), [contents])
+
+  // Filtra ideias legadas do endpoint antigo (source "Multi-source"/"Google News + YouTube"
+  // ou relevance contendo news.google.com). Elas ficam no DB mas não aparecem mais.
+  const visibleIdeaFeed = useMemo(() => ideaFeed.filter((i: any) => {
+    if (i.source === "Multi-source" || i.source === "Google News + YouTube") return false
+    if (typeof i.relevance === "string" && /news\.google\.com/i.test(i.relevance)) return false
+    return true
+  }), [ideaFeed])
 
   function clearFilters() { setSearch(""); setSkillFilters([]); setPhaseFilters([]); setAreaFilters([]) }
 
@@ -818,10 +819,10 @@ export function ConteudoClient({ initialContents, areas }: Props) {
             </>)}
 
             {/* Filters — only monitored terms + "Outros" */}
-            {ideaFeed.length > 0 && (() => {
+            {visibleIdeaFeed.length > 0 && (() => {
               const monitoredTermNames = monitorTerms.filter((t: any) => t.isActive).map((t: any) => t.term)
-              const othersCount = ideaFeed.filter((i: any) => !i.isUsed && !monitoredTermNames.includes(i.term)).length
-              const usedWithContent = ideaFeed.filter((i: any) => i.isUsed && contents.some((c: Content) => c.ideaFeedId === i.id || c.title === i.title)).length
+              const othersCount = visibleIdeaFeed.filter((i: any) => !i.isUsed && !monitoredTermNames.includes(i.term)).length
+              const usedWithContent = visibleIdeaFeed.filter((i: any) => i.isUsed && contents.some((c: Content) => c.ideaFeedId === i.id || c.title === i.title)).length
 
               if (!ideaTermFilter && monitoredTermNames.length > 0) setIdeaTermFilter(monitoredTermNames[0])
 
@@ -829,7 +830,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="flex items-center gap-1 bg-cockpit-border-light rounded-xl p-1 flex-wrap">
                     {monitoredTermNames.map((term) => {
-                      const count = ideaFeed.filter((i: any) => !i.isUsed && i.term === term).length
+                      const count = visibleIdeaFeed.filter((i: any) => !i.isUsed && i.term === term).length
                       return (
                         <button key={term} onClick={() => setIdeaTermFilter(term)} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", ideaTermFilter === term ? "bg-cockpit-surface text-cockpit-text shadow-sm" : "text-cockpit-muted hover:text-cockpit-text")}>
                           {term} <span className="text-[10px] opacity-70 ml-1">{count}</span>
@@ -851,7 +852,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
               )
             })()}
 
-            {ideaFeed.length === 0 ? (
+            {visibleIdeaFeed.length === 0 ? (
               <div className="cockpit-card flex flex-col items-center justify-center py-16 text-cockpit-muted">
                 <Lightbulb size={32} strokeWidth={1} />
                 <p className="text-sm mt-3">Nenhuma ideia ainda</p>
@@ -859,7 +860,7 @@ export function ConteudoClient({ initialContents, areas }: Props) {
               </div>
             ) : (
               <div className="space-y-2">
-                {ideaFeed
+                {visibleIdeaFeed
                   .filter((i: any) => {
                     if (showUsedIdeas) return true
                     if (i.isUsed) return false
