@@ -98,7 +98,7 @@ export async function generateIdeasNowAction(): Promise<ActionResult> {
     const terms = await db.monitorTerm.findMany({ where: { userId, isActive: true } })
     if (terms.length === 0) return { success: false, error: "Adicione termos de monitoramento primeiro" }
 
-    const { generateIdeasWithResearch } = await import("@/services/ai.service")
+    const { generateIdeasWithResearch, safeDate } = await import("@/services/ai.service")
     const termNames = terms.map((t) => t.term)
 
     const { ideas, usage } = await generateIdeasWithResearch({
@@ -123,7 +123,7 @@ export async function generateIdeasNowAction(): Promise<ActionResult> {
         relevance: idea.relevance,
         source: idea.sourceTitle,
         sourceUrl: idea.sourceUrl,
-        publishedAt: idea.publishedAt ? new Date(idea.publishedAt) : null,
+        publishedAt: safeDate(idea.publishedAt),
         language: idea.language ?? "pt-BR",
         pioneerScore: idea.pioneerScore,
         evidenceId: idea.evidenceId,

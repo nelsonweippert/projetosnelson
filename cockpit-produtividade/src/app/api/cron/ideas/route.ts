@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { generateIdeasWithResearch } from "@/services/ai.service"
+import { generateIdeasWithResearch, safeDate } from "@/services/ai.service"
 
 export const maxDuration = 300
 
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
           relevance: idea.relevance,
           source: idea.sourceTitle,
           sourceUrl: idea.sourceUrl,
-          publishedAt: idea.publishedAt ? new Date(idea.publishedAt) : null,
+          publishedAt: safeDate(idea.publishedAt),
           language: idea.language ?? "pt-BR",
           pioneerScore: idea.pioneerScore,
           evidenceId: idea.evidenceId,

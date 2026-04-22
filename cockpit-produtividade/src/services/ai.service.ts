@@ -156,6 +156,15 @@ const REDIRECT_DOMAINS = [
   "lnkd.in",
 ]
 
+// Parse string de data → Date válido ou null. Claude às vezes retorna "recently",
+// "", "N/A", etc. `new Date(x)` nessas retorna Invalid Date que depois explode em
+// `.toISOString()` ou no Prisma com "Invalid time value".
+export function safeDate(value: unknown): Date | null {
+  if (!value || typeof value !== "string") return null
+  const d = new Date(value)
+  return isNaN(d.getTime()) ? null : d
+}
+
 function isRealPublisherUrl(url: string): boolean {
   if (!url || typeof url !== "string") return false
   try {
@@ -775,7 +784,7 @@ export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Pro
     term: c.term,
     title: c.title,
     url: c.url,
-    pubDate: c.publishedAt ? new Date(c.publishedAt) : null,
+    pubDate: safeDate(c.publishedAt),
     source: c.publisher,
     description: c.snippet,
     locale: c.locale === "en-US" ? "en-US" : "pt-BR",
@@ -805,7 +814,7 @@ export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Pro
         update: { title: it.title, summary: it.summary, keyQuote: it.keyQuote, relevanceScore: it.relevanceScore, freshnessHours: it.freshnessHours },
         create: {
           userId, term: it.candidate.term, url: it.canonicalUrl, title: it.title,
-          publishedAt: it.publishedAt ? new Date(it.publishedAt) : null,
+          publishedAt: safeDate(it.publishedAt),
           summary: it.summary, keyQuote: it.keyQuote,
           sourceAuthority: it.sourceAuthority, language: it.language,
           relevanceScore: it.relevanceScore, freshnessHours: it.freshnessHours,
@@ -824,7 +833,7 @@ export async function generateIdeasWithResearch(opts: GenerateIdeasOptions): Pro
         update: { title: s.title, summary: s.summary, keyQuote: s.keyQuote, relevanceScore: s.agreementScore },
         create: {
           userId, term: s.primary.candidate.term, url: s.url, title: s.title,
-          publishedAt: s.publishedAt ? new Date(s.publishedAt) : null,
+          publishedAt: safeDate(s.publishedAt),
           summary: s.summary, keyQuote: s.keyQuote,
           sourceAuthority: s.sourceAuthority, language: s.language,
           relevanceScore: s.agreementScore, freshnessHours: s.primary.freshnessHours,
