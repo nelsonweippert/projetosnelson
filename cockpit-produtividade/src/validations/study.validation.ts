@@ -5,7 +5,8 @@ export const createStudySchema = z.object({
   description: z.string().optional(),
   category: z.string().min(1, "Categoria obrigatória"),
   totalHours: z.coerce.number().min(0).default(0),
-  link: z.string().url("URL inválida").optional().or(z.literal("")),
+  link: z.string().optional().or(z.literal("")),
+  areaIds: z.array(z.string()).default([]),
 })
 
 export const updateStudySchema = createStudySchema.partial().extend({

@@ -6,6 +6,9 @@ import type {
   CalendarEvent,
   Reference,
   ReferenceArea,
+  Study,
+  StudyArea,
+  StudySession,
 } from "@/generated/prisma/client"
 
 export type {
@@ -17,6 +20,9 @@ export type {
   Transaction,
   FinancialGoal,
   Reference,
+  Study,
+  StudyArea,
+  StudySession,
   AiInsight,
   CalendarEvent,
   TaskStatus,
@@ -27,6 +33,7 @@ export type {
   ReferenceType,
   ReferenceStatus,
   ReferencePriority,
+  StudyStatus,
   EventType,
 } from "@/generated/prisma/client"
 
@@ -98,6 +105,13 @@ export type TaskWithDue = Task & { areas: (TaskArea & { area: Area })[] }
 export type ReferenceWithAreas = Reference & { areas: (ReferenceArea & { area: Area })[]; area?: Area | null }
 
 export type StudyPlanned = Reference & { areas: (ReferenceArea & { area: Area })[]; area?: Area | null }
+
+export type StudyWithRelations = Study & {
+  area?: Area | null
+  areas: (StudyArea & { area: Area })[]
+  sessions: StudySession[]
+  _count?: { sessions: number }
+}
 
 export type CreateCalendarEventInput = {
   title: string
