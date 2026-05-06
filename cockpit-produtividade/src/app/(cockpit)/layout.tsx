@@ -20,6 +20,7 @@ import {
   Layers,
   Sparkles,
   CalendarDays,
+  Settings as SettingsIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -31,6 +32,7 @@ const navItems = [
   { label: "Estudos", href: "/estudos", icon: BookOpen },
   { label: "Financeiro", href: "/financeiro", icon: DollarSign },
   { label: "Motor IA", href: "/ia", icon: Sparkles },
+  { label: "Configurações", href: "/settings", icon: SettingsIcon },
 ]
 
 type Theme = "day" | "sunset" | "night"
