@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/auth"
 import { generateWeeklyReview, generateModuleInsight, getAiInsights, reactToInsight } from "@/services/ai.service"
+import { checkRateLimit, rateLimitErrorMessage } from "@/lib/rate-limit"
 import type { ActionResult } from "@/types"
 
 async function getUserId() {
@@ -10,12 +11,23 @@ async function getUserId() {
   return session.user.id
 }
 
+async function guardLLM(userId: string): Promise<ActionResult | null> {
+  const limit = await checkRateLimit(userId, { perMinute: 5, perDay: 200 })
+  if (!limit.ok) {
+    return { success: false, error: rateLimitErrorMessage(limit) }
+  }
+  return null
+}
+
 export async function generateWeeklyReviewAction(): Promise<ActionResult<string>> {
   try {
     const userId = await getUserId()
+    const blocked = await guardLLM(userId)
+    if (blocked) return blocked as ActionResult<string>
     const review = await generateWeeklyReview(userId)
     return { success: true, data: review }
   } catch (e) {
+    console.error("[generateWeeklyReviewAction]", e)
     return { success: false, error: "Erro ao gerar revisão semanal" }
   }
 }
@@ -23,9 +35,12 @@ export async function generateWeeklyReviewAction(): Promise<ActionResult<string>
 export async function generateModuleInsightAction(module: "tasks" | "finance" | "studies"): Promise<ActionResult<string>> {
   try {
     const userId = await getUserId()
+    const blocked = await guardLLM(userId)
+    if (blocked) return blocked as ActionResult<string>
     const insight = await generateModuleInsight(userId, module)
     return { success: true, data: insight }
-  } catch {
+  } catch (e) {
+    console.error("[generateModuleInsightAction]", e)
     return { success: false, error: "Erro ao gerar insight" }
   }
 }

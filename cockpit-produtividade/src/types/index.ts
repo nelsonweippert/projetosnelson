@@ -20,6 +20,7 @@ export type {
   Transaction,
   FinancialGoal,
   Reference,
+  ReferenceArea,
   Study,
   StudyArea,
   StudySession,
