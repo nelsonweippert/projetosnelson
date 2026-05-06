@@ -9,6 +9,8 @@ import type {
   Study,
   StudyArea,
   StudySession,
+  Note,
+  NoteArea,
 } from "@/generated/prisma/client"
 
 export type {
@@ -25,6 +27,8 @@ export type {
   StudySession,
   AiInsight,
   CalendarEvent,
+  Note,
+  NoteArea,
   TaskStatus,
   TaskPriority,
   Recurrence,
@@ -35,6 +39,7 @@ export type {
   ReferencePriority,
   StudyStatus,
   EventType,
+  NoteType,
 } from "@/generated/prisma/client"
 
 export type ActionResult<T = unknown> =
@@ -111,6 +116,24 @@ export type StudyWithRelations = Study & {
   areas: (StudyArea & { area: Area })[]
   sessions: StudySession[]
   _count?: { sessions: number }
+}
+
+export type NoteWithRelations = Note & {
+  areas: (NoteArea & { area: Area })[]
+  linkedTask?: { id: string; title: string; status: string } | null
+  linkedEvent?: { id: string; title: string; date: Date } | null
+}
+
+export type CreateNoteInputT = {
+  title?: string
+  content: string
+  type?: "FREE" | "JOURNAL" | "MEETING" | "IDEA" | "REFERENCE_SUMMARY"
+  source?: string
+  date?: Date
+  isPinned?: boolean
+  areaIds?: string[]
+  linkedTaskId?: string | null
+  linkedEventId?: string | null
 }
 
 export type CreateCalendarEventInput = {

@@ -1,8 +1,8 @@
 /**
  * Router — persiste CapturedItem direto no Prisma.
  *
- * Ao contrário do worker errado anterior (que batia em REST), aqui o
- * worker é trusted (single-user app, mesma máquina) e usa Prisma direto.
+ * Worker é trusted (single-user, mesma máquina), então usa Prisma direto
+ * em vez de bater num REST. Cada item é roteado independente.
  */
 
 import { db } from "./db.js"
@@ -21,6 +21,19 @@ function findByName<T extends { name: string }>(list: T[], hint: string | null) 
       return name.includes(target) || target.includes(name)
     }) ?? null
   )
+}
+
+function findManyByNames<T extends { id: string; name: string }>(
+  list: T[],
+  hints: string[],
+): T[] {
+  if (!hints?.length) return []
+  const matches = new Map<string, T>()
+  for (const hint of hints) {
+    const m = findByName(list, hint)
+    if (m) matches.set(m.id, m)
+  }
+  return Array.from(matches.values())
 }
 
 export type RouterContext = {
@@ -44,10 +57,18 @@ export async function loadUserContext(userId: string): Promise<RouterContext> {
 }
 
 export type RouteResult =
-  | { posted: true; entity: "task" | "event" | "study_session"; id: string; payload: unknown }
+  | {
+      posted: true
+      entity: "task" | "event" | "study_session" | "note"
+      id: string
+      payload: unknown
+    }
   | { posted: false; reason: string; suggestions?: string[] }
 
-export async function route(item: CapturedItem, ctx: RouterContext): Promise<RouteResult> {
+export async function route(
+  item: CapturedItem,
+  ctx: RouterContext,
+): Promise<RouteResult> {
   switch (item.type) {
     case "task": {
       const area = findByName(ctx.areas, item.area_hint)
@@ -66,6 +87,7 @@ export async function route(item: CapturedItem, ctx: RouterContext): Promise<Rou
     }
 
     case "event": {
+      const area = findByName(ctx.areas, item.area_hint)
       const event = await db.calendarEvent.create({
         data: {
           userId: ctx.userId,
@@ -76,6 +98,10 @@ export async function route(item: CapturedItem, ctx: RouterContext): Promise<Rou
           location: item.location ?? null,
           description: item.description ?? null,
           attendees: item.attendees ?? [],
+          ...(area && {
+            areaId: area.id,
+            areas: { create: [{ areaId: area.id }] },
+          }),
         },
       })
       return { posted: true, entity: "event", id: event.id, payload: event }
@@ -118,11 +144,32 @@ export async function route(item: CapturedItem, ctx: RouterContext): Promise<Rou
         })
         return session
       })
-      return { posted: true, entity: "study_session", id: result.id, payload: result }
+      return {
+        posted: true,
+        entity: "study_session",
+        id: result.id,
+        payload: result,
+      }
+    }
+
+    case "note": {
+      const matchedAreas = findManyByNames(ctx.areas, item.area_hints ?? [])
+      const note = await db.note.create({
+        data: {
+          userId: ctx.userId,
+          title: item.title ?? null,
+          content: item.content,
+          type: item.note_type,
+          source: "telegram",
+          ...(matchedAreas.length > 0 && {
+            areas: { create: matchedAreas.map((a) => ({ areaId: a.id })) },
+          }),
+        },
+      })
+      return { posted: true, entity: "note", id: note.id, payload: note }
     }
 
     case "ambiguous": {
-      // Cria task LOW pra revisão manual com a transcrição original
       const task = await db.task.create({
         data: {
           userId: ctx.userId,

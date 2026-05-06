@@ -5,6 +5,7 @@ import {
   Plus, Archive, Layers, X, Loader2, ChevronLeft,
   CheckSquare, BookOpen, Video, DollarSign, Calendar, Clock, Circle, Ban,
   Search, SlidersHorizontal, AlertTriangle, ExternalLink, TrendingUp, TrendingDown,
+  StickyNote, Pin,
 } from "lucide-react"
 import { cn, formatDate, formatCurrency } from "@/lib/utils"
 import { createAreaAction, archiveAreaAction } from "@/app/actions/area.actions"
@@ -13,9 +14,9 @@ import type { Area } from "@/types"
 const PRESET_COLORS = ["#00D6AB", "#3B82F6", "#8B5CF6", "#EF4444", "#F59E0B", "#10B981", "#EC4899", "#F97316"]
 const PRESET_ICONS = ["📁", "💼", "🏃", "💰", "📚", "🎬", "🧠", "🎯", "🚀", "🌟", "💡", "🔥"]
 
-type ItemKind = "task" | "reference" | "content" | "transaction" | "event"
-const KIND_LABEL: Record<ItemKind, string> = { task: "Tarefas", reference: "Estudos", content: "Conteúdo", transaction: "Financeiro", event: "Eventos" }
-const KIND_ICON: Record<ItemKind, React.ElementType> = { task: CheckSquare, reference: BookOpen, content: Video, transaction: DollarSign, event: Calendar }
+type ItemKind = "task" | "reference" | "content" | "transaction" | "event" | "note"
+const KIND_LABEL: Record<ItemKind, string> = { task: "Tarefas", reference: "Estudos", content: "Conteúdo", transaction: "Financeiro", event: "Eventos", note: "Notas" }
+const KIND_ICON: Record<ItemKind, React.ElementType> = { task: CheckSquare, reference: BookOpen, content: Video, transaction: DollarSign, event: Calendar, note: StickyNote }
 
 function toggle<T>(arr: T[], val: T): T[] {
   return arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val]
@@ -30,6 +31,7 @@ interface AreaData {
   contents: AnyItem[]
   transactions: AnyItem[]
   calendarEvents: AnyItem[]
+  notes: AnyItem[]
 }
 
 interface Props { initialAreas: Area[] }
@@ -97,11 +99,12 @@ export function AreasClient({ initialAreas }: Props) {
     for (const c of areaData.contents) items.push({ kind: "content", data: c, title: c.title, date: new Date(c.createdAt) })
     for (const t of areaData.transactions) items.push({ kind: "transaction", data: t, title: t.description, date: new Date(t.date) })
     for (const e of areaData.calendarEvents) items.push({ kind: "event", data: e, title: e.title, date: new Date(e.date) })
+    for (const n of areaData.notes ?? []) items.push({ kind: "note", data: n, title: n.title || n.content.slice(0, 60), date: new Date(n.date) })
     return items
   }, [areaData])
 
   const counts = useMemo(() => {
-    const c: Record<ItemKind, number> = { task: 0, reference: 0, content: 0, transaction: 0, event: 0 }
+    const c: Record<ItemKind, number> = { task: 0, reference: 0, content: 0, transaction: 0, event: 0, note: 0 }
     for (const item of allItems) c[item.kind]++
     return c
   }, [allItems])
@@ -217,17 +220,37 @@ export function AreasClient({ initialAreas }: Props) {
       )
     }
 
-    // event
-    const e = item.data
+    if (item.kind === "event") {
+      const e = item.data
+      return (
+        <div key={e.id + "ev"} className="flex items-start gap-3 p-3 rounded-xl border border-cockpit-border bg-cockpit-bg">
+          <Calendar size={15} className="text-blue-500 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-cockpit-text truncate">{e.title}</p>
+            <div className="flex items-center gap-2 mt-1 text-[10px] text-cockpit-muted">
+              <span>Evento</span>
+              <span>{new Date(e.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} {new Date(e.date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+              {e.location && <span>📍 {e.location}</span>}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    // note
+    const n = item.data
+    const NOTE_TYPE_LABEL: Record<string, string> = { FREE: "Livre", JOURNAL: "Diário", MEETING: "Reunião", IDEA: "Ideia", REFERENCE_SUMMARY: "Resumo" }
     return (
-      <div key={e.id + "ev"} className="flex items-start gap-3 p-3 rounded-xl border border-cockpit-border bg-cockpit-bg">
-        <Calendar size={15} className="text-blue-500 mt-0.5" />
+      <div key={n.id + "note"} className="flex items-start gap-3 p-3 rounded-xl border border-cockpit-border bg-cockpit-bg">
+        {n.isPinned ? <Pin size={15} className="text-amber-500 mt-0.5" /> : <StickyNote size={15} className="text-amber-600 mt-0.5" />}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-cockpit-text truncate">{e.title}</p>
+          <p className="text-sm font-medium text-cockpit-text truncate">{n.title || n.content.split("\n")[0].slice(0, 80)}</p>
+          <p className="text-[11px] text-cockpit-muted line-clamp-2 mt-0.5">{n.content.slice(0, 140)}</p>
           <div className="flex items-center gap-2 mt-1 text-[10px] text-cockpit-muted">
-            <span>Evento</span>
-            <span>{new Date(e.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} {new Date(e.date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
-            {e.location && <span>📍 {e.location}</span>}
+            <span>Nota</span>
+            <span className="px-1.5 py-0 rounded-full bg-amber-500/10 text-amber-600">{NOTE_TYPE_LABEL[n.type] ?? n.type}</span>
+            <span>{formatDate(n.date)}</span>
+            {n.source && <span>• {n.source}</span>}
           </div>
         </div>
       </div>
