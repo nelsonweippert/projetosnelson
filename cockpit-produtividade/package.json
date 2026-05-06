@@ -12,7 +12,8 @@
     "db:status": "prisma migrate status",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
-    "agent:ideas": "tsx scripts/idea-agent.ts"
+    "agent:ideas": "tsx scripts/idea-agent.ts",
+    "worker:captura": "tsx worker/captura/index.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.86.0",
@@ -26,6 +27,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "google-news-url-decoder": "^1.2.1",
+    "groq-sdk": "^0.31.0",
     "lucide-react": "^1.7.0",
     "motion": "^12.38.0",
     "next": "16.2.2",

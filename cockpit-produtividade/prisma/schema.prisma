@@ -24,6 +24,8 @@ model User {
   transactions   Transaction[]
   goals          FinancialGoal[]
   references     Reference[]
+  studies        Study[]
+  studySessions  StudySession[]
   aiInsights     AiInsight[]
   calendarEvents CalendarEvent[]
   apiUsage       ApiUsage[]
@@ -51,6 +53,8 @@ model Area {
   taskAreas          TaskArea[]
   transactions       Transaction[]
   references         Reference[]
+  studies            Study[]
+  studyAreas         StudyArea[]
   calendarEvents     CalendarEvent[]
   referenceAreas     ReferenceArea[]
   calendarEventAreas CalendarEventArea[]
@@ -256,6 +260,71 @@ model ReferenceArea {
 // ========================================
 // Conteúdo — Pipeline de Produção
 // ========================================
+
+// ========================================
+// Estudos — Projetos de Estudo (Studies)
+// ========================================
+// Representa um projeto/curso/livro/área de aprendizado em andamento.
+// Contém múltiplas sessões (StudySession) registrando tempo dedicado.
+// Complementa Reference (biblioteca de itens) com tracking de horas e estado.
+
+enum StudyStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  PAUSED
+}
+
+model Study {
+  id          String      @id @default(cuid())
+  title       String
+  description String?
+  category    String
+  link        String?
+  totalHours  Float       @default(0)
+  doneHours   Float       @default(0)
+  status      StudyStatus @default(NOT_STARTED)
+  isArchived  Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  userId   String
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  areaId   String?
+  area     Area?          @relation(fields: [areaId], references: [id])
+  areas    StudyArea[]
+  sessions StudySession[]
+
+  @@index([userId, status])
+  @@map("studies")
+}
+
+model StudyArea {
+  studyId String
+  areaId  String
+  study   Study  @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  area    Area   @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@id([studyId, areaId])
+  @@map("study_areas")
+}
+
+model StudySession {
+  id        String   @id @default(cuid())
+  hours     Float
+  note      String?
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  studyId String
+  study   Study  @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@index([studyId, date])
+  @@map("study_sessions")
+}
 
 // ========================================
 // Calendário
