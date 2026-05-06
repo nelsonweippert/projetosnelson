@@ -20,11 +20,15 @@ import {
   Layers,
   Sparkles,
   CalendarDays,
+  Sunrise,
+  Inbox,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "Hoje", href: "/daily", icon: Sunrise },
+  { label: "Inbox", href: "/inbox", icon: Inbox },
   { label: "Áreas", href: "/areas", icon: Layers },
   { label: "Tarefas", href: "/tarefas", icon: CheckSquare },
   { label: "Calendário", href: "/calendario", icon: CalendarDays },
