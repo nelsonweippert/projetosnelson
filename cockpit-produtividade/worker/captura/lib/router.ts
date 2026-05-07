@@ -1,8 +1,8 @@
 /**
  * Router — persiste CapturedItem direto no Prisma.
  *
- * Ao contrário do worker errado anterior (que batia em REST), aqui o
- * worker é trusted (single-user app, mesma máquina) e usa Prisma direto.
+ * Worker é trusted (single-user, mesma máquina), então usa Prisma direto
+ * em vez de bater num REST. Cada item é roteado independente.
  */
 
 import { db } from "./db.js"
@@ -11,7 +11,10 @@ import type { CapturedItem } from "../schema/captured-item.js"
 const slug = (s: string | null | undefined) =>
   (s ?? "").toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "")
 
-function findByName<T extends { name: string }>(list: T[], hint: string | null) {
+function findByName<T extends { name: string }>(
+  list: T[],
+  hint: string | null | undefined,
+) {
   if (!hint) return null
   const target = slug(hint)
   if (!target) return null
@@ -23,14 +26,28 @@ function findByName<T extends { name: string }>(list: T[], hint: string | null) 
   )
 }
 
+function findManyByNames<T extends { id: string; name: string }>(
+  list: T[],
+  hints: string[],
+): T[] {
+  if (!hints?.length) return []
+  const matches = new Map<string, T>()
+  for (const hint of hints) {
+    const m = findByName(list, hint)
+    if (m) matches.set(m.id, m)
+  }
+  return Array.from(matches.values())
+}
+
 export type RouterContext = {
   userId: string
   areas: { id: string; name: string }[]
   studies: { id: string; title: string }[]
+  contacts: { id: string; name: string }[]
 }
 
 export async function loadUserContext(userId: string): Promise<RouterContext> {
-  const [areas, studies] = await Promise.all([
+  const [areas, studies, contacts] = await Promise.all([
     db.area.findMany({
       where: { userId, isArchived: false },
       select: { id: true, name: true },
@@ -39,15 +56,27 @@ export async function loadUserContext(userId: string): Promise<RouterContext> {
       where: { userId, isArchived: false, status: { not: "COMPLETED" } },
       select: { id: true, title: true },
     }),
+    db.contact.findMany({
+      where: { userId, isArchived: false },
+      select: { id: true, name: true },
+    }),
   ])
-  return { userId, areas, studies }
+  return { userId, areas, studies, contacts }
 }
 
 export type RouteResult =
-  | { posted: true; entity: "task" | "event" | "study_session"; id: string; payload: unknown }
+  | {
+      posted: true
+      entity: "task" | "event" | "study_session" | "note" | "contact"
+      id: string
+      payload: unknown
+    }
   | { posted: false; reason: string; suggestions?: string[] }
 
-export async function route(item: CapturedItem, ctx: RouterContext): Promise<RouteResult> {
+export async function route(
+  item: CapturedItem,
+  ctx: RouterContext,
+): Promise<RouteResult> {
   switch (item.type) {
     case "task": {
       const area = findByName(ctx.areas, item.area_hint)
@@ -66,6 +95,7 @@ export async function route(item: CapturedItem, ctx: RouterContext): Promise<Rou
     }
 
     case "event": {
+      const area = findByName(ctx.areas, item.area_hint)
       const event = await db.calendarEvent.create({
         data: {
           userId: ctx.userId,
@@ -76,6 +106,10 @@ export async function route(item: CapturedItem, ctx: RouterContext): Promise<Rou
           location: item.location ?? null,
           description: item.description ?? null,
           attendees: item.attendees ?? [],
+          ...(area && {
+            areaId: area.id,
+            areas: { create: [{ areaId: area.id }] },
+          }),
         },
       })
       return { posted: true, entity: "event", id: event.id, payload: event }
@@ -118,11 +152,75 @@ export async function route(item: CapturedItem, ctx: RouterContext): Promise<Rou
         })
         return session
       })
-      return { posted: true, entity: "study_session", id: result.id, payload: result }
+      return {
+        posted: true,
+        entity: "study_session",
+        id: result.id,
+        payload: result,
+      }
+    }
+
+    case "note": {
+      const matchedAreas = findManyByNames(ctx.areas, item.area_hints ?? [])
+      const matchedContact = findByName(ctx.contacts, item.contact_hint ?? null)
+      const now = new Date()
+      const result = await db.$transaction(async (tx) => {
+        const note = await tx.note.create({
+          data: {
+            userId: ctx.userId,
+            title: item.title ?? null,
+            content: item.content,
+            type: item.note_type,
+            source: "telegram",
+            date: now,
+            ...(matchedContact && { contactId: matchedContact.id }),
+            ...(matchedAreas.length > 0 && {
+              areas: { create: matchedAreas.map((a) => ({ areaId: a.id })) },
+            }),
+          },
+        })
+        if (matchedContact) {
+          await tx.contact.update({
+            where: { id: matchedContact.id },
+            data: { lastContactAt: now },
+          })
+        }
+        return note
+      })
+      return { posted: true, entity: "note", id: result.id, payload: result }
+    }
+
+    case "contact": {
+      const stripAt = (h: string | null | undefined) =>
+        h ? h.trim().replace(/^@/, "") : null
+
+      // Evita duplicata por nome (case-insensitive, accents-folded)
+      const nameSlug = slug(item.name)
+      const existing = ctx.contacts.find((c) => slug(c.name) === nameSlug)
+      if (existing) {
+        return {
+          posted: false,
+          reason: `contato "${item.name}" já cadastrado (${existing.id})`,
+        }
+      }
+
+      const area = findByName(ctx.areas, item.area_hint)
+      const contact = await db.contact.create({
+        data: {
+          userId: ctx.userId,
+          name: item.name,
+          company: item.company ?? null,
+          project: item.project ?? null,
+          telegram: stripAt(item.telegram),
+          twitter: stripAt(item.twitter),
+          notes: item.notes ?? null,
+          areaId: area?.id ?? null,
+        },
+      })
+      return { posted: true, entity: "contact", id: contact.id, payload: contact }
     }
 
     case "ambiguous": {
-      // Cria task LOW pra revisão manual com a transcrição original
       const task = await db.task.create({
         data: {
           userId: ctx.userId,

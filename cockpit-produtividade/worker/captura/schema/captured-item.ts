@@ -3,47 +3,83 @@ import { z } from "zod"
 /**
  * Schema canônico do item capturado pelo worker.
  *
- * Discriminated union: o LLM classifica em UM tipo e extrai os campos
- * relevantes. Quando ambiguo ou multi-intent, força "ambiguous".
+ * Discriminated union — o LLM classifica em UM tipo por item e extrai os
+ * campos relevantes. Multi-intent ("amanhã reunião com X 14h E criar
+ * tarefa de slides") agora é suportado via CapturedBatchSchema (items[]).
  *
- * Mapeia diretamente pros models do Prisma:
- * - task → Task
- * - event → CalendarEvent
- * - study_session → StudySession (topic_hint resolve pra Study via match)
- * - ambiguous → Task (priority LOW, description = transcrição) pra revisão manual
+ * Mapeia direto pros models do Prisma:
+ * - task           → Task
+ * - event          → CalendarEvent
+ * - study_session  → StudySession (topic_hint resolve pra Study via match)
+ * - note           → Note (FREE/JOURNAL/MEETING/IDEA)
+ * - ambiguous      → Task LOW pra revisão manual
  */
+
+const TaskSchema = z.object({
+  type: z.literal("task"),
+  title: z.string(),
+  description: z.string().nullish(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
+  due_date: z.string().nullish(),
+  area_hint: z.string().nullish(),
+})
+
+const EventSchema = z.object({
+  type: z.literal("event"),
+  title: z.string(),
+  date: z.string(),
+  end_date: z.string().nullish(),
+  location: z.string().nullish(),
+  attendees: z.array(z.string()).default([]),
+  description: z.string().nullish(),
+  area_hint: z.string().nullish(),
+})
+
+const StudySessionSchema = z.object({
+  type: z.literal("study_session"),
+  topic_hint: z.string(),
+  hours: z.number().min(0.25).max(24),
+  note: z.string().nullish(),
+})
+
+const NoteSchema = z.object({
+  type: z.literal("note"),
+  note_type: z.enum(["FREE", "JOURNAL", "MEETING", "IDEA"]).default("FREE"),
+  title: z.string().nullish(),
+  content: z.string().min(1),
+  area_hints: z.array(z.string()).default([]),
+  contact_hint: z.string().nullish(),
+})
+
+const ContactSchema = z.object({
+  type: z.literal("contact"),
+  name: z.string().min(1),
+  company: z.string().nullish(),
+  project: z.string().nullish(),
+  telegram: z.string().nullish(),
+  twitter: z.string().nullish(),
+  area_hint: z.string().nullish(),
+  notes: z.string().nullish(),
+})
+
+const AmbiguousSchema = z.object({
+  type: z.literal("ambiguous"),
+  suggestions: z.array(z.string()),
+  raw: z.string(),
+})
+
 export const CapturedItemSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("task"),
-    title: z.string(),
-    description: z.string().nullable(),
-    priority: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
-    due_date: z.string().nullable(),
-    area_hint: z.string().nullable(),
-  }),
-
-  z.object({
-    type: z.literal("event"),
-    title: z.string(),
-    date: z.string(), // ISO required — sem data, vira task
-    end_date: z.string().nullable(),
-    location: z.string().nullable(),
-    attendees: z.array(z.string()),
-    description: z.string().nullable(),
-  }),
-
-  z.object({
-    type: z.literal("study_session"),
-    topic_hint: z.string(),
-    hours: z.number().min(0.25).max(24),
-    note: z.string().nullable(),
-  }),
-
-  z.object({
-    type: z.literal("ambiguous"),
-    suggestions: z.array(z.string()),
-    raw: z.string(),
-  }),
+  TaskSchema,
+  EventSchema,
+  StudySessionSchema,
+  NoteSchema,
+  ContactSchema,
+  AmbiguousSchema,
 ])
 
+export const CapturedBatchSchema = z.object({
+  items: z.array(CapturedItemSchema).min(1).max(5),
+})
+
 export type CapturedItem = z.infer<typeof CapturedItemSchema>
+export type CapturedBatch = z.infer<typeof CapturedBatchSchema>

@@ -46,31 +46,62 @@ const VOCABULARY = (process.env.CAPTURE_VOCABULARY ?? "")
   .map((s) => s.trim())
   .filter(Boolean)
 
-const { getUpdates, sendMessage, downloadFile, mdEscape } = await import("./lib/telegram.js")
-const inbox = await import("./lib/inbox.js")
-const { transcribe } = await import("./lib/transcribe.js")
-const { classify } = await import("./lib/classify.js")
-const { route, loadUserContext } = await import("./lib/router.js")
-
-await inbox.loadInbox()
-console.log("[captura] inbox carregada — last update_id:", inbox.getLastUpdateId())
+import { getUpdates, sendMessage, downloadFile, mdEscape } from "./lib/telegram.js"
+import * as inbox from "./lib/inbox.js"
+import { transcribe } from "./lib/transcribe.js"
+import { classify } from "./lib/classify.js"
+import { route, loadUserContext } from "./lib/router.js"
 
 const ENTITY_LABEL: Record<string, string> = {
   task: "📋 Tarefa",
   event: "📅 Evento",
   study_session: "📚 Sessão de Estudo",
+  note: "📝 Nota",
+  contact: "👤 Contato",
 }
 
-function formatReply(itemType: string, result: Awaited<ReturnType<typeof route>>): string {
-  if (!result.posted) {
-    if (result.suggestions && result.suggestions.length) {
-      const opts = result.suggestions.map((s) => `• ${mdEscape(s)}`).join("\n")
-      return `❓ *Ambíguo* \\— escolhe:\n${opts}`
+type RouteResult = Awaited<ReturnType<typeof route>>
+
+function formatBatchReply(results: RouteResult[]): string {
+  const lines: string[] = []
+  const counts: Record<string, number> = {}
+  let failures = 0
+
+  for (const r of results) {
+    if (r.posted) {
+      counts[r.entity] = (counts[r.entity] ?? 0) + 1
+    } else {
+      failures++
     }
-    return `⚠️ Não postei: ${mdEscape(result.reason)}`
   }
-  const label = ENTITY_LABEL[result.entity] ?? result.entity
-  return `✓ *${mdEscape(label)}* registrado\n\n_id ${result.id}_`
+
+  const summary = Object.entries(counts)
+    .map(([k, v]) => `${ENTITY_LABEL[k] ?? k}${v > 1 ? ` ×${v}` : ""}`)
+    .join("  ")
+
+  if (summary) {
+    lines.push(`✓ ${mdEscape(summary)}`)
+  }
+
+  // Detalhe por item (limita a 5 linhas)
+  for (const r of results.slice(0, 5)) {
+    if (r.posted) {
+      lines.push(`  • ${mdEscape(ENTITY_LABEL[r.entity] ?? r.entity)} _\\(${r.id.slice(0, 8)}\\)_`)
+    } else {
+      if (r.suggestions && r.suggestions.length) {
+        const opts = r.suggestions.slice(0, 2).map((s) => mdEscape(s)).join(" | ")
+        lines.push(`  • ❓ ${opts}`)
+      } else {
+        lines.push(`  • ⚠️ ${mdEscape(r.reason)}`)
+      }
+    }
+  }
+
+  if (failures > 0 && results.length > 0 && Object.keys(counts).length === 0) {
+    return `⚠️ Nada foi registrado:\n${lines.join("\n")}`
+  }
+
+  return lines.join("\n")
 }
 
 async function processUpdate(update: import("./lib/telegram.js").TelegramUpdate) {
@@ -123,27 +154,41 @@ async function processUpdate(update: import("./lib/telegram.js").TelegramUpdate)
     }
 
     const ctx = await loadUserContext(USER_ID)
-    const { item, durationMs: classifyMs } = await classify(text, {
+    const { items, durationMs: classifyMs } = await classify(text, {
       areas: ctx.areas.map((a) => a.name),
       studies: ctx.studies.map((s) => s.title),
+      contacts: ctx.contacts.map((c) => c.name),
       vocabulary: VOCABULARY,
     })
     await inbox.update(updateId, {
       status: "classified",
-      classified: item,
+      classified: items,
       classifyMs,
     })
-    console.log(`[captura ${updateId}] classificado: ${item.type}`)
+    console.log(
+      `[captura ${updateId}] classificado: ${items.length} item(s) — ${items.map((i) => i.type).join(", ")}`,
+    )
 
-    const result = await route(item, ctx)
+    const results: RouteResult[] = []
+    for (const item of items) {
+      results.push(await route(item, ctx))
+    }
+    const allPosted = results.every((r) => r.posted)
+    const postedIds = results
+      .filter((r): r is Extract<RouteResult, { posted: true }> => r.posted)
+      .map((r) => `${r.entity}:${r.id}`)
+      .join(",")
+
     await inbox.update(updateId, {
-      status: result.posted ? "posted" : "ambiguous",
-      postedTo: result.posted ? result.entity : undefined,
-      postedId: result.posted ? result.id : undefined,
-      reason: !result.posted ? result.reason : undefined,
+      status: allPosted ? "posted" : "ambiguous",
+      postedTo: postedIds || undefined,
+      postedId: undefined,
+      reason: !allPosted
+        ? results.find((r) => !r.posted)?.reason
+        : undefined,
     })
 
-    await sendMessage(msg.chat.id, formatReply(item.type, result), {
+    await sendMessage(msg.chat.id, formatBatchReply(results), {
       replyTo: msg.message_id,
     })
   } catch (err) {
@@ -159,35 +204,45 @@ async function processUpdate(update: import("./lib/telegram.js").TelegramUpdate)
   }
 }
 
-let running = true
-process.on("SIGTERM", () => {
-  console.log("[captura] SIGTERM recebido — encerrando")
-  running = false
-})
-process.on("SIGINT", () => {
-  console.log("[captura] SIGINT recebido — encerrando")
-  running = false
-})
+async function main() {
+  await inbox.loadInbox()
+  console.log("[captura] inbox carregada — last update_id:", inbox.getLastUpdateId())
 
-console.log("[captura] worker iniciado")
-console.log("[captura] user id:", USER_ID)
-console.log("[captura] owner chat:", OWNER_CHAT_ID ?? "(qualquer — modo aberto, INSEGURO)")
-console.log(`[captura] vocabulário: ${VOCABULARY.length} termos`)
+  let running = true
+  process.on("SIGTERM", () => {
+    console.log("[captura] SIGTERM recebido — encerrando")
+    running = false
+  })
+  process.on("SIGINT", () => {
+    console.log("[captura] SIGINT recebido — encerrando")
+    running = false
+  })
 
-let offset = inbox.getLastUpdateId() + 1
+  console.log("[captura] worker iniciado")
+  console.log("[captura] user id:", USER_ID)
+  console.log("[captura] owner chat:", OWNER_CHAT_ID ?? "(qualquer — modo aberto, INSEGURO)")
+  console.log(`[captura] vocabulário: ${VOCABULARY.length} termos`)
 
-while (running) {
-  try {
-    const updates = await getUpdates({ offset, timeoutSeconds: 30 })
-    for (const u of updates) {
-      await processUpdate(u)
-      offset = u.update_id + 1
+  let offset = inbox.getLastUpdateId() + 1
+
+  while (running) {
+    try {
+      const updates = await getUpdates({ offset, timeoutSeconds: 30 })
+      for (const u of updates) {
+        await processUpdate(u)
+        offset = u.update_id + 1
+      }
+    } catch (err) {
+      console.error("[captura] erro no loop:", (err as Error).message)
+      await new Promise((r) => setTimeout(r, 5000))
     }
-  } catch (err) {
-    console.error("[captura] erro no loop:", (err as Error).message)
-    await new Promise((r) => setTimeout(r, 5000))
   }
+
+  console.log("[captura] loop encerrado")
+  process.exit(0)
 }
 
-console.log("[captura] loop encerrado")
-process.exit(0)
+main().catch((err) => {
+  console.error("[captura] erro fatal:", err)
+  process.exit(1)
+})
