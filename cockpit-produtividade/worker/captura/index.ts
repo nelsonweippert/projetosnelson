@@ -51,6 +51,8 @@ import * as inbox from "./lib/inbox.js"
 import { transcribe } from "./lib/transcribe.js"
 import { classify } from "./lib/classify.js"
 import { route, loadUserContext } from "./lib/router.js"
+import { polishMeetingNote } from "./lib/polish.js"
+import type { CapturedItem } from "./schema/captured-item.js"
 
 const ENTITY_LABEL: Record<string, string> = {
   task: "📋 Tarefa",
@@ -169,8 +171,45 @@ async function processUpdate(update: import("./lib/telegram.js").TelegramUpdate)
       `[captura ${updateId}] classificado: ${items.length} item(s) — ${items.map((i) => i.type).join(", ")}`,
     )
 
-    const results: RouteResult[] = []
+    // Polish: reescreve notas MEETING via Sonnet antes de persistir
+    const polishedItems: CapturedItem[] = []
     for (const item of items) {
+      if (item.type === "note" && item.note_type === "MEETING") {
+        try {
+          const contactName = item.contact_hint
+            ? ctx.contacts.find((c) =>
+                c.name.toLowerCase().includes(item.contact_hint!.toLowerCase()),
+              )?.name ?? null
+            : null
+          const areaName = item.area_hints?.[0] ?? null
+          const polished = await polishMeetingNote({
+            transcript: text,
+            draftContent: item.content,
+            contactName,
+            area: areaName,
+          })
+          console.log(
+            `[captura ${updateId}] polish: ${polished.durationMs}ms (${polished.inputTokens}+${polished.outputTokens} tokens)`,
+          )
+          polishedItems.push({
+            ...item,
+            title: polished.title || item.title,
+            content: polished.content || item.content,
+          })
+        } catch (err) {
+          console.error(
+            `[captura ${updateId}] polish falhou, usando draft:`,
+            (err as Error).message,
+          )
+          polishedItems.push(item)
+        }
+      } else {
+        polishedItems.push(item)
+      }
+    }
+
+    const results: RouteResult[] = []
+    for (const item of polishedItems) {
       results.push(await route(item, ctx))
     }
     const allPosted = results.every((r) => r.posted)
