@@ -70,6 +70,7 @@ export type RouteResult =
       entity: "task" | "event" | "study_session" | "note" | "contact"
       id: string
       payload: unknown
+      meta?: { contactName?: string }
     }
   | { posted: false; reason: string; suggestions?: string[] }
 
@@ -187,7 +188,13 @@ export async function route(
         }
         return note
       })
-      return { posted: true, entity: "note", id: result.id, payload: result }
+      return {
+        posted: true,
+        entity: "note",
+        id: result.id,
+        payload: result,
+        ...(matchedContact && { meta: { contactName: matchedContact.name } }),
+      }
     }
 
     case "contact": {

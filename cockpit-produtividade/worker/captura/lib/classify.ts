@@ -187,9 +187,14 @@ Chame a tool "capture" passando items[].
   • Ex: "ideia: criar curso de Rust pra iniciantes" → IDEA.
   • Ex: "reunião com Pedro: decidimos lançar dia 15" → MEETING.
   • Use area_hints (array, max 3) com nomes da lista de áreas.
-  • CONTATO: se a mensagem mencionar conversa/follow-up com contato cadastrado, preencha contact_hint com o nome EXATO da lista. É CRÍTICO para tracking de relacionamento.
-  • Ex: "conversei com Pedro hoje sobre proposta" → note_type=MEETING, contact_hint="Pedro"
-  • Ex: "Maria me mandou mensagem sobre projeto X" → contact_hint="Maria"
+  • CONTATO (gating EXPLÍCITO): contact_hint SÓ é preenchido quando há gatilho explícito de associação ao contato. Caso contrário, deixe NULL — o usuário decide depois manualmente.
+    Gatilhos válidos: "adicione/adicionar ao contato X", "adicionar no contato X", "no contato X", "para/pro contato X", "histórico do/da X", "registrar no X", "follow-up com X", "no histórico do X".
+    • Ex: "Adicione ao contato Pedro: conversamos sobre proposta" → MEETING, contact_hint="Pedro"
+    • Ex: "Histórico do Floky: combinamos lançamento dia 15" → MEETING, contact_hint="Floky"
+    • Ex: "No contato Maria, ela topou o projeto" → MEETING, contact_hint="Maria"
+    • CONTRA-EXEMPLO: "conversei com Pedro hoje sobre proposta" → contact_hint=NULL (sem gatilho explícito; vira nota solta).
+    • CONTRA-EXEMPLO: "Maria me mandou mensagem" → contact_hint=NULL.
+    • Se houver gatilho mas o nome não estiver na lista de contatos cadastrados, ainda assim deixe contact_hint=NULL (não invente).
 - contact: APENAS quando a mensagem começa com gatilho explícito de cadastro:
   "cadastrar contato", "novo contato", "adicionar contato", "salvar contato", "criar contato".
   Extraia nome (obrigatório), e quando mencionado: empresa, projeto, telegram, twitter, área.

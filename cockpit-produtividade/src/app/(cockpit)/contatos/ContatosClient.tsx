@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import {
   Plus,
   X,
@@ -11,6 +12,7 @@ import {
   Send,
   AtSign,
   AlertTriangle,
+  AlertCircle,
   CheckCircle2,
   Clock,
   Archive,
@@ -21,7 +23,6 @@ import {
 import { cn } from "@/lib/utils"
 import {
   createContactAction,
-  updateContactAction,
   archiveContactAction,
 } from "@/app/actions/contact.actions"
 import type { Area, ContactStats } from "@/types"
@@ -65,16 +66,16 @@ function followUpStatus(d: string | Date | null) {
 }
 
 export function ContatosClient({ initialContacts, initialStats, areas }: Props) {
+  const router = useRouter()
   const [contacts, setContacts] = useState<ContactRow[]>(initialContacts)
   const [stats, setStats] = useState<ContactStats>(initialStats)
   const [showForm, setShowForm] = useState(false)
-  const [editing, setEditing] = useState<ContactRow | null>(null)
   const [search, setSearch] = useState("")
   const [filterArea, setFilterArea] = useState<string | "ALL">("ALL")
   const [filterStale, setFilterStale] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  // Form
+  // Form (apenas criação — edição mora no /contatos/[id])
   const [name, setName] = useState("")
   const [company, setCompany] = useState("")
   const [project, setProject] = useState("")
@@ -93,7 +94,6 @@ export function ContatosClient({ initialContacts, initialStats, areas }: Props) 
     setNotesField("")
     setAreaId("")
     setFormError("")
-    setEditing(null)
     setShowForm(false)
   }
 
@@ -102,16 +102,8 @@ export function ContatosClient({ initialContacts, initialStats, areas }: Props) 
     setShowForm(true)
   }
 
-  function openEdit(c: ContactRow) {
-    setName(c.name)
-    setCompany(c.company ?? "")
-    setProject(c.project ?? "")
-    setTelegram(c.telegram ?? "")
-    setTwitter(c.twitter ?? "")
-    setNotesField(c.notes ?? "")
-    setAreaId(c.area?.id ?? "")
-    setEditing(c)
-    setShowForm(true)
+  function openDetail(id: string) {
+    router.push(`/contatos/${id}`)
   }
 
   function handleSave() {
@@ -121,7 +113,7 @@ export function ContatosClient({ initialContacts, initialStats, areas }: Props) 
     }
     setFormError("")
     startTransition(async () => {
-      const payload = {
+      const result = await createContactAction({
         name,
         company: company || undefined,
         project: project || undefined,
@@ -129,23 +121,16 @@ export function ContatosClient({ initialContacts, initialStats, areas }: Props) 
         twitter: twitter || undefined,
         notes: notesField || undefined,
         areaId: areaId || null,
-      }
-      const result = editing
-        ? await updateContactAction(editing.id, payload)
-        : await createContactAction(payload)
+      })
       if (result.success) {
         const c = result.data as ContactRow
-        if (editing) {
-          setContacts((prev) => prev.map((x) => (x.id === c.id ? c : x)))
-        } else {
-          setContacts((prev) => [c, ...prev])
-          setStats((s) => ({
-            ...s,
-            total: s.total + 1,
-            neverContacted: s.neverContacted + 1,
-            needsFollowUp: s.needsFollowUp + 1,
-          }))
-        }
+        setContacts((prev) => [c, ...prev])
+        setStats((s) => ({
+          ...s,
+          total: s.total + 1,
+          neverContacted: s.neverContacted + 1,
+          needsFollowUp: s.needsFollowUp + 1,
+        }))
         resetForm()
       } else {
         setFormError(result.error ?? "Erro desconhecido")
@@ -287,9 +272,7 @@ export function ContatosClient({ initialContacts, initialStats, areas }: Props) 
       {showForm && (
         <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-cockpit-text">
-              {editing ? "Editar contato" : "Novo contato"}
-            </h3>
+            <h3 className="font-semibold text-cockpit-text">Novo contato</h3>
             <button
               onClick={resetForm}
               className="text-cockpit-muted hover:text-cockpit-text"
@@ -392,7 +375,7 @@ export function ContatosClient({ initialContacts, initialStats, areas }: Props) 
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent-dark disabled:opacity-50"
             >
               {isPending && <Loader2 size={14} className="animate-spin" />}
-              {editing ? "Salvar" : "Criar contato"}
+              Criar contato
             </button>
           </div>
         </div>
@@ -411,7 +394,7 @@ export function ContatosClient({ initialContacts, initialStats, areas }: Props) 
             <ContactRowCard
               key={c.id}
               contact={c}
-              onEdit={() => openEdit(c)}
+              onOpen={() => openDetail(c.id)}
               onArchive={() => handleArchive(c.id)}
             />
           ))}
@@ -423,15 +406,17 @@ export function ContatosClient({ initialContacts, initialStats, areas }: Props) 
 
 function ContactRowCard({
   contact,
-  onEdit,
+  onOpen,
   onArchive,
 }: {
   contact: ContactRow
-  onEdit: () => void
+  onOpen: () => void
   onArchive: () => void
 }) {
   const status = followUpStatus(contact.lastContactAt)
   const StatusIcon = status.icon
+  const days = daysSince(contact.lastContactAt)
+  const needsAlert = days === null || days >= 15
   const initials = contact.name
     .split(" ")
     .map((s) => s[0])
@@ -442,7 +427,7 @@ function ContactRowCard({
 
   return (
     <div
-      onClick={onEdit}
+      onClick={onOpen}
       className="cursor-pointer bg-cockpit-surface border border-cockpit-border rounded-2xl p-4 hover:border-accent/40 transition-colors flex items-center gap-4"
     >
       {/* Avatar */}
@@ -461,6 +446,13 @@ function ContactRowCard({
       {/* Main */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
+          {needsAlert && (
+            <AlertCircle
+              size={16}
+              className="text-red-500 flex-shrink-0"
+              aria-label="Follow-up pendente"
+            />
+          )}
           <h3 className="font-semibold text-cockpit-text truncate">
             {contact.name}
           </h3>
