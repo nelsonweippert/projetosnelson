@@ -57,6 +57,7 @@ const ENTITY_LABEL: Record<string, string> = {
   event: "📅 Evento",
   study_session: "📚 Sessão de Estudo",
   note: "📝 Nota",
+  contact: "👤 Contato",
 }
 
 type RouteResult = Awaited<ReturnType<typeof route>>

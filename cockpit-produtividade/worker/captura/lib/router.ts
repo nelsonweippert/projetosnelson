@@ -67,7 +67,7 @@ export async function loadUserContext(userId: string): Promise<RouterContext> {
 export type RouteResult =
   | {
       posted: true
-      entity: "task" | "event" | "study_session" | "note"
+      entity: "task" | "event" | "study_session" | "note" | "contact"
       id: string
       payload: unknown
     }
@@ -188,6 +188,36 @@ export async function route(
         return note
       })
       return { posted: true, entity: "note", id: result.id, payload: result }
+    }
+
+    case "contact": {
+      const stripAt = (h: string | null | undefined) =>
+        h ? h.trim().replace(/^@/, "") : null
+
+      // Evita duplicata por nome (case-insensitive, accents-folded)
+      const nameSlug = slug(item.name)
+      const existing = ctx.contacts.find((c) => slug(c.name) === nameSlug)
+      if (existing) {
+        return {
+          posted: false,
+          reason: `contato "${item.name}" já cadastrado (${existing.id})`,
+        }
+      }
+
+      const area = findByName(ctx.areas, item.area_hint)
+      const contact = await db.contact.create({
+        data: {
+          userId: ctx.userId,
+          name: item.name,
+          company: item.company ?? null,
+          project: item.project ?? null,
+          telegram: stripAt(item.telegram),
+          twitter: stripAt(item.twitter),
+          notes: item.notes ?? null,
+          areaId: area?.id ?? null,
+        },
+      })
+      return { posted: true, entity: "contact", id: contact.id, payload: contact }
     }
 
     case "ambiguous": {

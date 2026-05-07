@@ -88,6 +88,32 @@ const ITEM_VARIANTS = [
   {
     type: "object",
     properties: {
+      type: { const: "contact" },
+      name: { type: "string", description: "Nome completo do contato" },
+      company: { type: ["string", "null"] },
+      project: { type: ["string", "null"] },
+      telegram: {
+        type: ["string", "null"],
+        description: "Handle do Telegram, sem @",
+      },
+      twitter: {
+        type: ["string", "null"],
+        description: "Handle do Twitter/X, sem @",
+      },
+      area_hint: {
+        type: ["string", "null"],
+        description: "Área associada (apenas valor da lista de áreas)",
+      },
+      notes: {
+        type: ["string", "null"],
+        description: "Observações adicionais sobre o contato (contexto, como conheceu)",
+      },
+    },
+    required: ["type", "name"],
+  },
+  {
+    type: "object",
+    properties: {
       type: { const: "ambiguous" },
       suggestions: { type: "array", items: { type: "string" } },
       raw: { type: "string" },
@@ -138,7 +164,7 @@ Agora: ${now}
 
 [TAREFA]
 Decomponha a mensagem em 1+ itens (multi-intent). Cada item é UM tipo:
-task | event | study_session | note | ambiguous.
+task | event | study_session | note | contact | ambiguous.
 Chame a tool "capture" passando items[].
 
 [REGRAS GERAIS]
@@ -164,6 +190,15 @@ Chame a tool "capture" passando items[].
   • CONTATO: se a mensagem mencionar conversa/follow-up com contato cadastrado, preencha contact_hint com o nome EXATO da lista. É CRÍTICO para tracking de relacionamento.
   • Ex: "conversei com Pedro hoje sobre proposta" → note_type=MEETING, contact_hint="Pedro"
   • Ex: "Maria me mandou mensagem sobre projeto X" → contact_hint="Maria"
+- contact: APENAS quando a mensagem começa com gatilho explícito de cadastro:
+  "cadastrar contato", "novo contato", "adicionar contato", "salvar contato", "criar contato".
+  Extraia nome (obrigatório), e quando mencionado: empresa, projeto, telegram, twitter, área.
+  Handles do Telegram/Twitter SEM o @.
+  • Ex: "cadastrar contato Pedro Almeida da TempestLabs no projeto Wraithfall, telegram @pedro_dev"
+    → name="Pedro Almeida", company="TempestLabs", project="Wraithfall", telegram="pedro_dev"
+  • Ex: "novo contato Maria Silva, twitter maria_silva"
+    → name="Maria Silva", twitter="maria_silva"
+  • Sem gatilho explícito → NÃO use contact (vira note ou outro).
 - ambiguous: só quando o pedaço é genuinamente irrecuperável. Suggestions com 2-3 alternativas.
 
 [OUTPUT]

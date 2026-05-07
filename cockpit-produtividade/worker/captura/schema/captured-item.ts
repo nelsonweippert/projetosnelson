@@ -51,6 +51,17 @@ const NoteSchema = z.object({
   contact_hint: z.string().nullish(),
 })
 
+const ContactSchema = z.object({
+  type: z.literal("contact"),
+  name: z.string().min(1),
+  company: z.string().nullish(),
+  project: z.string().nullish(),
+  telegram: z.string().nullish(),
+  twitter: z.string().nullish(),
+  area_hint: z.string().nullish(),
+  notes: z.string().nullish(),
+})
+
 const AmbiguousSchema = z.object({
   type: z.literal("ambiguous"),
   suggestions: z.array(z.string()),
@@ -62,6 +73,7 @@ export const CapturedItemSchema = z.discriminatedUnion("type", [
   EventSchema,
   StudySessionSchema,
   NoteSchema,
+  ContactSchema,
   AmbiguousSchema,
 ])
 
