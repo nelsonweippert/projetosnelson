@@ -64,6 +64,13 @@ const ENTITY_LABEL: Record<string, string> = {
 
 type RouteResult = Awaited<ReturnType<typeof route>>
 
+function entityDisplay(r: Extract<RouteResult, { posted: true }>): string {
+  if (r.entity === "note" && r.meta?.contactName) {
+    return `👤 Histórico de ${r.meta.contactName}`
+  }
+  return ENTITY_LABEL[r.entity] ?? r.entity
+}
+
 function formatBatchReply(results: RouteResult[]): string {
   const lines: string[] = []
   const counts: Record<string, number> = {}
@@ -71,14 +78,20 @@ function formatBatchReply(results: RouteResult[]): string {
 
   for (const r of results) {
     if (r.posted) {
-      counts[r.entity] = (counts[r.entity] ?? 0) + 1
+      const key = r.entity === "note" && r.meta?.contactName ? "contact_history" : r.entity
+      counts[key] = (counts[key] ?? 0) + 1
     } else {
       failures++
     }
   }
 
+  const SUMMARY_LABEL: Record<string, string> = {
+    ...ENTITY_LABEL,
+    contact_history: "👤 Histórico",
+  }
+
   const summary = Object.entries(counts)
-    .map(([k, v]) => `${ENTITY_LABEL[k] ?? k}${v > 1 ? ` ×${v}` : ""}`)
+    .map(([k, v]) => `${SUMMARY_LABEL[k] ?? k}${v > 1 ? ` ×${v}` : ""}`)
     .join("  ")
 
   if (summary) {
@@ -88,7 +101,7 @@ function formatBatchReply(results: RouteResult[]): string {
   // Detalhe por item (limita a 5 linhas)
   for (const r of results.slice(0, 5)) {
     if (r.posted) {
-      lines.push(`  • ${mdEscape(ENTITY_LABEL[r.entity] ?? r.entity)} _\\(${r.id.slice(0, 8)}\\)_`)
+      lines.push(`  • ${mdEscape(entityDisplay(r))} _\\(${r.id.slice(0, 8)}\\)_`)
     } else {
       if (r.suggestions && r.suggestions.length) {
         const opts = r.suggestions.slice(0, 2).map((s) => mdEscape(s)).join(" | ")
