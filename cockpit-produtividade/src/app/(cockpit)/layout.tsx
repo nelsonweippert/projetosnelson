@@ -21,6 +21,7 @@ import {
   Sparkles,
   CalendarDays,
   StickyNote,
+  Users,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -28,6 +29,7 @@ const navItems = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Áreas", href: "/areas", icon: Layers },
   { label: "Tarefas", href: "/tarefas", icon: CheckSquare },
+  { label: "Contatos", href: "/contatos", icon: Users },
   { label: "Notas", href: "/notas", icon: StickyNote },
   { label: "Calendário", href: "/calendario", icon: CalendarDays },
   { label: "Estudos", href: "/estudos", icon: BookOpen },

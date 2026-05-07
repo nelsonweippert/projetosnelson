@@ -19,6 +19,7 @@ function getClient() {
 export type UserContext = {
   areas?: string[]
   studies?: string[]
+  contacts?: string[]
   vocabulary?: string[]
   timezone?: string
 }
@@ -76,6 +77,11 @@ const ITEM_VARIANTS = [
         items: { type: "string" },
         description: "Nomes de áreas relacionadas (max 3)",
       },
+      contact_hint: {
+        type: ["string", "null"],
+        description:
+          "Nome de contato cadastrado (cliente/parceiro/lead) mencionado na mensagem. APENAS valor da lista de contatos ou null. Crucial para follow-up.",
+      },
     },
     required: ["type", "note_type", "content", "area_hints"],
   },
@@ -111,7 +117,13 @@ const TOOL_DEF = {
 }
 
 function buildSystemPrompt(ctx: UserContext = {}) {
-  const { areas = [], studies = [], vocabulary = [], timezone = "America/Sao_Paulo" } = ctx
+  const {
+    areas = [],
+    studies = [],
+    contacts = [],
+    vocabulary = [],
+    timezone = "America/Sao_Paulo",
+  } = ctx
   const now = new Date().toISOString()
 
   return `Você é um classificador determinístico de mensagens da rotina diária.
@@ -119,6 +131,7 @@ function buildSystemPrompt(ctx: UserContext = {}) {
 [CONTEXTO]
 Áreas ativas: ${areas.length ? areas.join(", ") : "(nenhuma)"}
 Projetos de estudo ativos: ${studies.length ? studies.join(", ") : "(nenhum)"}
+Contatos cadastrados: ${contacts.length ? contacts.join(", ") : "(nenhum)"}
 Vocabulário: ${vocabulary.length ? vocabulary.join(", ") : "(nenhum)"}
 Timezone: ${timezone}
 Agora: ${now}
@@ -134,6 +147,7 @@ Chame a tool "capture" passando items[].
 - Confiança individual < 60% para um pedaço → "ambiguous" só nesse pedaço.
 - Datas relativas ("amanhã", "sexta") → ISO 8601 considerando timezone.
 - area_hint: APENAS valor da lista de áreas ou null. Sem inventar.
+- contact_hint: APENAS valor da lista de contatos ou null. Sem inventar.
 
 [REGRAS POR TIPO]
 - task: ação a executar ("pagar conta", "comprar X", "ligar pra Y"). priority LOW/MEDIUM/HIGH.
@@ -147,6 +161,9 @@ Chame a tool "capture" passando items[].
   • Ex: "ideia: criar curso de Rust pra iniciantes" → IDEA.
   • Ex: "reunião com Pedro: decidimos lançar dia 15" → MEETING.
   • Use area_hints (array, max 3) com nomes da lista de áreas.
+  • CONTATO: se a mensagem mencionar conversa/follow-up com contato cadastrado, preencha contact_hint com o nome EXATO da lista. É CRÍTICO para tracking de relacionamento.
+  • Ex: "conversei com Pedro hoje sobre proposta" → note_type=MEETING, contact_hint="Pedro"
+  • Ex: "Maria me mandou mensagem sobre projeto X" → contact_hint="Maria"
 - ambiguous: só quando o pedaço é genuinamente irrecuperável. Suggestions com 2-3 alternativas.
 
 [OUTPUT]

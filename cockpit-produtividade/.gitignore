@@ -42,3 +42,6 @@ next-env.d.ts
 
 /src/generated/prisma
 .env*.local
+
+# worker runtime state (idempotency / inbox)
+/worker/captura/data/inbox.json

@@ -11,7 +11,10 @@ import type { CapturedItem } from "../schema/captured-item.js"
 const slug = (s: string | null | undefined) =>
   (s ?? "").toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "")
 
-function findByName<T extends { name: string }>(list: T[], hint: string | null) {
+function findByName<T extends { name: string }>(
+  list: T[],
+  hint: string | null | undefined,
+) {
   if (!hint) return null
   const target = slug(hint)
   if (!target) return null
@@ -40,10 +43,11 @@ export type RouterContext = {
   userId: string
   areas: { id: string; name: string }[]
   studies: { id: string; title: string }[]
+  contacts: { id: string; name: string }[]
 }
 
 export async function loadUserContext(userId: string): Promise<RouterContext> {
-  const [areas, studies] = await Promise.all([
+  const [areas, studies, contacts] = await Promise.all([
     db.area.findMany({
       where: { userId, isArchived: false },
       select: { id: true, name: true },
@@ -52,8 +56,12 @@ export async function loadUserContext(userId: string): Promise<RouterContext> {
       where: { userId, isArchived: false, status: { not: "COMPLETED" } },
       select: { id: true, title: true },
     }),
+    db.contact.findMany({
+      where: { userId, isArchived: false },
+      select: { id: true, name: true },
+    }),
   ])
-  return { userId, areas, studies }
+  return { userId, areas, studies, contacts }
 }
 
 export type RouteResult =
@@ -154,19 +162,32 @@ export async function route(
 
     case "note": {
       const matchedAreas = findManyByNames(ctx.areas, item.area_hints ?? [])
-      const note = await db.note.create({
-        data: {
-          userId: ctx.userId,
-          title: item.title ?? null,
-          content: item.content,
-          type: item.note_type,
-          source: "telegram",
-          ...(matchedAreas.length > 0 && {
-            areas: { create: matchedAreas.map((a) => ({ areaId: a.id })) },
-          }),
-        },
+      const matchedContact = findByName(ctx.contacts, item.contact_hint ?? null)
+      const now = new Date()
+      const result = await db.$transaction(async (tx) => {
+        const note = await tx.note.create({
+          data: {
+            userId: ctx.userId,
+            title: item.title ?? null,
+            content: item.content,
+            type: item.note_type,
+            source: "telegram",
+            date: now,
+            ...(matchedContact && { contactId: matchedContact.id }),
+            ...(matchedAreas.length > 0 && {
+              areas: { create: matchedAreas.map((a) => ({ areaId: a.id })) },
+            }),
+          },
+        })
+        if (matchedContact) {
+          await tx.contact.update({
+            where: { id: matchedContact.id },
+            data: { lastContactAt: now },
+          })
+        }
+        return note
       })
-      return { posted: true, entity: "note", id: note.id, payload: note }
+      return { posted: true, entity: "note", id: result.id, payload: result }
     }
 
     case "ambiguous": {

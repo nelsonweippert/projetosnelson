@@ -15,6 +15,7 @@ import {
   FileText,
   BookMarked,
   Star,
+  User,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -39,6 +40,7 @@ export type NoteRow = {
   areas?: { area: NoteAreaRef }[]
   linkedTask?: { id: string; title: string; status: string } | null
   linkedEvent?: { id: string; title: string; date: string | Date } | null
+  contact?: { id: string; name: string; company: string | null } | null
 }
 
 export type NoteStats = {
@@ -479,8 +481,16 @@ function NoteCard({
         {preview}
       </p>
 
-      {noteAreas.length > 0 && (
+      {(noteAreas.length > 0 || note.contact) && (
         <div className="flex items-center gap-1 flex-wrap">
+          {note.contact && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent-dark border border-accent/20 flex items-center gap-1">
+              <User size={10} /> {note.contact.name}
+              {note.contact.company && (
+                <span className="opacity-70">· {note.contact.company}</span>
+              )}
+            </span>
+          )}
           {noteAreas.slice(0, 3).map((a) => (
             <span
               key={a.id}

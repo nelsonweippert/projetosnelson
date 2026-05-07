@@ -11,6 +11,7 @@ import type {
   StudySession,
   Note,
   NoteArea,
+  Contact,
 } from "@/generated/prisma/client"
 
 export type {
@@ -29,6 +30,7 @@ export type {
   CalendarEvent,
   Note,
   NoteArea,
+  Contact,
   TaskStatus,
   TaskPriority,
   Recurrence,
@@ -116,6 +118,24 @@ export type StudyWithRelations = Study & {
   areas: (StudyArea & { area: Area })[]
   sessions: StudySession[]
   _count?: { sessions: number }
+}
+
+export type ContactStats = {
+  total: number
+  neverContacted: number
+  staleOver14d: number
+  staleOver30d: number
+  needsFollowUp: number
+}
+
+export type ContactWithRelations = Contact & {
+  area?: Area | null
+  _count?: { linkedNotes: number }
+}
+
+export type ContactWithNotes = Contact & {
+  area?: Area | null
+  linkedNotes: (Note & { areas: (NoteArea & { area: Area })[] })[]
 }
 
 export type NoteWithRelations = Note & {

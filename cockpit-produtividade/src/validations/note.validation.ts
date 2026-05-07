@@ -18,6 +18,7 @@ export const createNoteSchema = z.object({
   areaIds: z.array(z.string()).default([]),
   linkedTaskId: z.string().nullable().optional(),
   linkedEventId: z.string().nullable().optional(),
+  contactId: z.string().nullable().optional(),
 })
 
 export const updateNoteSchema = createNoteSchema.partial()

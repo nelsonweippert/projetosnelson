@@ -18,36 +18,37 @@ import { z } from "zod"
 const TaskSchema = z.object({
   type: z.literal("task"),
   title: z.string(),
-  description: z.string().nullable(),
+  description: z.string().nullish(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
-  due_date: z.string().nullable(),
-  area_hint: z.string().nullable(),
+  due_date: z.string().nullish(),
+  area_hint: z.string().nullish(),
 })
 
 const EventSchema = z.object({
   type: z.literal("event"),
   title: z.string(),
   date: z.string(),
-  end_date: z.string().nullable(),
-  location: z.string().nullable(),
-  attendees: z.array(z.string()),
-  description: z.string().nullable(),
-  area_hint: z.string().nullable(),
+  end_date: z.string().nullish(),
+  location: z.string().nullish(),
+  attendees: z.array(z.string()).default([]),
+  description: z.string().nullish(),
+  area_hint: z.string().nullish(),
 })
 
 const StudySessionSchema = z.object({
   type: z.literal("study_session"),
   topic_hint: z.string(),
   hours: z.number().min(0.25).max(24),
-  note: z.string().nullable(),
+  note: z.string().nullish(),
 })
 
 const NoteSchema = z.object({
   type: z.literal("note"),
   note_type: z.enum(["FREE", "JOURNAL", "MEETING", "IDEA"]).default("FREE"),
-  title: z.string().nullable(),
+  title: z.string().nullish(),
   content: z.string().min(1),
   area_hints: z.array(z.string()).default([]),
+  contact_hint: z.string().nullish(),
 })
 
 const AmbiguousSchema = z.object({

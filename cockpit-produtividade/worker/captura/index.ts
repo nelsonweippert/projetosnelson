@@ -46,14 +46,11 @@ const VOCABULARY = (process.env.CAPTURE_VOCABULARY ?? "")
   .map((s) => s.trim())
   .filter(Boolean)
 
-const { getUpdates, sendMessage, downloadFile, mdEscape } = await import("./lib/telegram.js")
-const inbox = await import("./lib/inbox.js")
-const { transcribe } = await import("./lib/transcribe.js")
-const { classify } = await import("./lib/classify.js")
-const { route, loadUserContext } = await import("./lib/router.js")
-
-await inbox.loadInbox()
-console.log("[captura] inbox carregada — last update_id:", inbox.getLastUpdateId())
+import { getUpdates, sendMessage, downloadFile, mdEscape } from "./lib/telegram.js"
+import * as inbox from "./lib/inbox.js"
+import { transcribe } from "./lib/transcribe.js"
+import { classify } from "./lib/classify.js"
+import { route, loadUserContext } from "./lib/router.js"
 
 const ENTITY_LABEL: Record<string, string> = {
   task: "📋 Tarefa",
@@ -159,6 +156,7 @@ async function processUpdate(update: import("./lib/telegram.js").TelegramUpdate)
     const { items, durationMs: classifyMs } = await classify(text, {
       areas: ctx.areas.map((a) => a.name),
       studies: ctx.studies.map((s) => s.title),
+      contacts: ctx.contacts.map((c) => c.name),
       vocabulary: VOCABULARY,
     })
     await inbox.update(updateId, {
@@ -205,35 +203,45 @@ async function processUpdate(update: import("./lib/telegram.js").TelegramUpdate)
   }
 }
 
-let running = true
-process.on("SIGTERM", () => {
-  console.log("[captura] SIGTERM recebido — encerrando")
-  running = false
-})
-process.on("SIGINT", () => {
-  console.log("[captura] SIGINT recebido — encerrando")
-  running = false
-})
+async function main() {
+  await inbox.loadInbox()
+  console.log("[captura] inbox carregada — last update_id:", inbox.getLastUpdateId())
 
-console.log("[captura] worker iniciado")
-console.log("[captura] user id:", USER_ID)
-console.log("[captura] owner chat:", OWNER_CHAT_ID ?? "(qualquer — modo aberto, INSEGURO)")
-console.log(`[captura] vocabulário: ${VOCABULARY.length} termos`)
+  let running = true
+  process.on("SIGTERM", () => {
+    console.log("[captura] SIGTERM recebido — encerrando")
+    running = false
+  })
+  process.on("SIGINT", () => {
+    console.log("[captura] SIGINT recebido — encerrando")
+    running = false
+  })
 
-let offset = inbox.getLastUpdateId() + 1
+  console.log("[captura] worker iniciado")
+  console.log("[captura] user id:", USER_ID)
+  console.log("[captura] owner chat:", OWNER_CHAT_ID ?? "(qualquer — modo aberto, INSEGURO)")
+  console.log(`[captura] vocabulário: ${VOCABULARY.length} termos`)
 
-while (running) {
-  try {
-    const updates = await getUpdates({ offset, timeoutSeconds: 30 })
-    for (const u of updates) {
-      await processUpdate(u)
-      offset = u.update_id + 1
+  let offset = inbox.getLastUpdateId() + 1
+
+  while (running) {
+    try {
+      const updates = await getUpdates({ offset, timeoutSeconds: 30 })
+      for (const u of updates) {
+        await processUpdate(u)
+        offset = u.update_id + 1
+      }
+    } catch (err) {
+      console.error("[captura] erro no loop:", (err as Error).message)
+      await new Promise((r) => setTimeout(r, 5000))
     }
-  } catch (err) {
-    console.error("[captura] erro no loop:", (err as Error).message)
-    await new Promise((r) => setTimeout(r, 5000))
   }
+
+  console.log("[captura] loop encerrado")
+  process.exit(0)
 }
 
-console.log("[captura] loop encerrado")
-process.exit(0)
+main().catch((err) => {
+  console.error("[captura] erro fatal:", err)
+  process.exit(1)
+})

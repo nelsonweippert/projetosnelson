@@ -30,6 +30,7 @@ model User {
   calendarEvents CalendarEvent[]
   apiUsage       ApiUsage[]
   notes          Note[]
+  contacts       Contact[]
 
   @@map("users")
 }
@@ -60,6 +61,7 @@ model Area {
   referenceAreas     ReferenceArea[]
   calendarEventAreas CalendarEventArea[]
   noteAreas          NoteArea[]
+  contacts           Contact[]
 
   @@index([userId])
   @@map("areas")
@@ -432,9 +434,12 @@ model Note {
   linkedTask    Task?          @relation("TaskNotes", fields: [linkedTaskId], references: [id], onDelete: SetNull)
   linkedEventId String?
   linkedEvent   CalendarEvent? @relation("EventNotes", fields: [linkedEventId], references: [id], onDelete: SetNull)
+  contactId     String?
+  contact       Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
 
   @@index([userId, date])
   @@index([userId, type])
+  @@index([userId, contactId])
   @@map("notes")
 }
 
@@ -446,6 +451,37 @@ model NoteArea {
 
   @@id([noteId, areaId])
   @@map("note_areas")
+}
+
+// ========================================
+// Contatos — base de clientes / parceiros / leads
+// ========================================
+// Âncora cross-entidade: notas do worker (e UI) podem linkar contactId.
+// lastContactAt é atualizado automaticamente pelo router toda vez que
+// uma nota é criada com este contato, viabilizando follow-up tracking.
+
+model Contact {
+  id            String    @id @default(cuid())
+  name          String
+  company       String?
+  project       String?
+  telegram      String?   // @handle (sem @ ou com — normalizar)
+  twitter       String?   // @handle
+  notes         String?   // observações livres
+  lastContactAt DateTime?
+  isArchived    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  userId String
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  areaId String?
+  area   Area?   @relation(fields: [areaId], references: [id])
+  linkedNotes Note[]
+
+  @@index([userId, lastContactAt])
+  @@index([userId, isArchived])
+  @@map("contacts")
 }
 
 // ========================================

@@ -5,6 +5,7 @@ const INCLUDE_RELATIONS = {
   areas: { include: { area: true } },
   linkedTask: { select: { id: true, title: true, status: true } },
   linkedEvent: { select: { id: true, title: true, date: true } },
+  contact: { select: { id: true, name: true, company: true } },
 }
 
 export async function getNotes(
@@ -49,19 +50,30 @@ export async function createNote(
     areaIds?: string[]
     linkedTaskId?: string | null
     linkedEventId?: string | null
+    contactId?: string | null
   },
 ) {
-  const { areaIds, title, ...rest } = data
-  return db.note.create({
-    data: {
-      ...rest,
-      title: title && title.length > 0 ? title : null,
-      userId,
-      ...(areaIds && areaIds.length > 0 && {
-        areas: { create: areaIds.map((areaId) => ({ areaId })) },
-      }),
-    },
-    include: INCLUDE_RELATIONS,
+  const { areaIds, title, contactId, ...rest } = data
+  return db.$transaction(async (tx) => {
+    const note = await tx.note.create({
+      data: {
+        ...rest,
+        title: title && title.length > 0 ? title : null,
+        userId,
+        ...(contactId && { contactId }),
+        ...(areaIds && areaIds.length > 0 && {
+          areas: { create: areaIds.map((areaId) => ({ areaId })) },
+        }),
+      },
+      include: INCLUDE_RELATIONS,
+    })
+    if (contactId) {
+      await tx.contact.updateMany({
+        where: { id: contactId, userId },
+        data: { lastContactAt: data.date ?? new Date() },
+      })
+    }
+    return note
   })
 }
 
@@ -77,9 +89,10 @@ export async function updateNote(
     areaIds?: string[]
     linkedTaskId?: string | null
     linkedEventId?: string | null
+    contactId?: string | null
   },
 ) {
-  const { areaIds, title, ...rest } = data
+  const { areaIds, title, contactId, ...rest } = data
   return db.note.update({
     where: { id, userId },
     data: {
@@ -87,6 +100,7 @@ export async function updateNote(
       ...(title !== undefined && {
         title: title.length > 0 ? title : null,
       }),
+      ...(contactId !== undefined && { contactId: contactId || null }),
       ...(areaIds !== undefined && {
         areas: {
           deleteMany: {},

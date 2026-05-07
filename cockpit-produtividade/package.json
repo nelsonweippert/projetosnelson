@@ -13,7 +13,7 @@
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
     "agent:ideas": "tsx scripts/idea-agent.ts",
-    "worker:captura": "tsx worker/captura/index.ts"
+    "worker:captura": "tsx --env-file=.env.local worker/captura/index.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.86.0",
